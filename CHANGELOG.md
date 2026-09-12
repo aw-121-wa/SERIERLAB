@@ -7,6 +7,7 @@
 - JSON Schema + `jsonValidation`；坏文件保持 last-known-good
 - 串口 **port** 改存 `workspaceState`，不再自动写入 `.vscode/settings.json`
 - 命令：`Serial Lab: Edit Project Configuration`
+- **修复**：dataBits / parity / stopBits / flowControl 真正传入 SerialPort open（此前仅 baudRate）
 
 ## 0.2.15
 
