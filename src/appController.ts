@@ -6,6 +6,7 @@ import { SeriesStore } from './store/seriesStore';
 import { ChannelRegistry } from './store/channels';
 import { PendingUiQueue } from './store/pendingUiQueue';
 import { SessionClock } from './time/sessionClock';
+import { LastRxTracker } from './time/lastRxTracker';
 import { PlotPresenter } from './plot/plotPresenter';
 import * as state from './state/workspaceState';
 import { decodeHex, encodeHex } from './protocol/hex';
@@ -22,6 +23,8 @@ export class AppController implements vscode.Disposable {
   readonly series: SeriesStore;
   readonly channels = new ChannelRegistry();
   readonly clock = new SessionClock();
+  /** Status-bar `t` = latest RX session time, not extension lifetime. */
+  private readonly lastRx = new LastRxTracker();
   private customConfig: CustomProtocolConfig | undefined;
   private readonly pendingUi: PendingUiQueue;
   private readonly plot = new PlotPresenter();
@@ -104,6 +107,7 @@ export class AppController implements vscode.Disposable {
 
   private onRx(bytes: Uint8Array): void {
     const t = this.nowMs();
+    this.lastRx.update(t);
     this.raw.push(bytes, 'RX', t);
     this.pendingUi.push(t, 'RX', bytes);
     if (this.router.protocolKind === 'raw') return;
@@ -249,7 +253,7 @@ export class AppController implements vscode.Disposable {
       channels: this.channels.list(),
       droppedUiEntries: this.pendingUi.droppedEntryCount,
       droppedUiBytes: this.pendingUi.droppedByteCount,
-      tMs: this.nowMs(),
+      tMs: this.lastRx.tMs,
     });
   }
 
