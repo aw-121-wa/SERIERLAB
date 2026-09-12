@@ -1,6 +1,6 @@
 import { expressionAtOffset, splitExpression } from './sourceExpression';
 import { firmwareIdentityFromBytes, FirmwareIdentity } from '../swd/runtimeChannels';
-import { normalizeSourceScope } from './runtimeSymbolIdentity';
+import { normalizeSourceScope, scopePathsMatch } from './runtimeSymbolIdentity';
 
 export type RuntimeValueType = 'float32' | 'int32' | 'uint32' | 'bool';
 
@@ -108,13 +108,12 @@ export class RuntimeSymbolService {
     if (matches.length === 1) {
       rec = matches[0];
     } else {
-      // Prefer exact compile-unit match for file-static disambiguation.
-      const scoped = matches.filter((m) => normalizeSourceScope(m.sourceFile) === scope);
+      // Prefer compile-unit match for file-static (full path, not basename).
+      const scoped = matches.filter((m) => m.sourceFile && scopePathsMatch(m.sourceFile, sourceFile));
       if (scoped.length === 1) rec = scoped[0];
       else if (scoped.length > 1) {
         return { ok: false, reason: 'ambiguous-symbol', detail: `${scoped.length} matches in ${scope}` };
       } else {
-        // Fall back to unscoped unique; if still many, ambiguous.
         const unscoped = matches.filter((m) => !m.sourceFile);
         if (unscoped.length === 1) rec = unscoped[0];
         else return { ok: false, reason: 'ambiguous-symbol', detail: `${matches.length} matches for ${text}` };
@@ -135,7 +134,10 @@ export class RuntimeSymbolService {
       }
     }
     const kind: RuntimeSymbolKind = rec.sourceFile ? 'file-static' : 'global';
-    const symScope = normalizeSourceScope(rec.sourceFile ?? sourceFile);
+    // Canonical scope = DWARF CU path when known (full path), else editor path.
+    const symScope = rec.sourceFile
+      ? normalizeSourceScope(rec.sourceFile)
+      : normalizeSourceScope(sourceFile);
     const root = text.split(/[.[]/)[0]!;
     const rootRec = (this.byPath.get(root) ?? [])[0];
     const rootAddress = rootRec?.address ?? rec.address;

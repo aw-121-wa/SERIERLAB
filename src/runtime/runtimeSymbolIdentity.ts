@@ -9,12 +9,39 @@ export type RuntimeSymbolKeyParts = {
   expression: string;
 };
 
-/** Normalize source path for identity (basename-ish, forward slashes, lowercased). */
+/**
+ * Canonical compile-unit / source scope.
+ * Uses the full path (not basename) so App/motor.c ≠ Drivers/motor.c.
+ * POSIX-style separators; Windows drive lowercased; `.` / `..` collapsed.
+ * Case is preserved (do not assume case-insensitive filesystems).
+ */
 export function normalizeSourceScope(sourceFile: string | undefined): string {
   if (!sourceFile) return 'global';
-  const norm = sourceFile.replace(/\\/g, '/');
-  const base = norm.split('/').filter(Boolean).pop() ?? norm;
-  return base.toLowerCase();
+  let p = sourceFile.replace(/\\/g, '/');
+  p = p.replace(/^([A-Za-z]):/, (_m, d: string) => d.toLowerCase() + ':');
+  const parts: string[] = [];
+  for (const seg of p.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') {
+      if (parts.length > 0 && parts[parts.length - 1] !== '..' && !parts[parts.length - 1]!.includes(':')) {
+        parts.pop();
+      } else {
+        parts.push('..');
+      }
+      continue;
+    }
+    parts.push(seg);
+  }
+  return parts.join('/');
+}
+
+/** True if two scope paths refer to the same CU (absolute vs relative, etc.). */
+export function scopePathsMatch(a: string | undefined, b: string | undefined): boolean {
+  const na = normalizeSourceScope(a);
+  const nb = normalizeSourceScope(b);
+  if (na === 'global' || nb === 'global') return na === nb;
+  if (na === nb) return true;
+  return na.endsWith('/' + nb) || nb.endsWith('/' + na);
 }
 
 /** Short stable hash of compile-unit scope for channel ids. */

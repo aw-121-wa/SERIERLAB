@@ -2,7 +2,7 @@
   "name": "serial-lab",
   "displayName": "Serial Lab",
   "description": "Serial debugging workbench: protocols, waveform, terminal, export",
-  "version": "0.2.28",
+  "version": "0.2.29",
   "icon": "images/icon.png",
   "publisher": "czt123",
   "repository": {

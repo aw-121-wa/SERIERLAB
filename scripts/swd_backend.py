@@ -161,7 +161,16 @@ def load_elf(filename):
         for cu in dwarf.iter_CUs():
             top = cu.get_top_DIE()
             cu_name_attr = top.attributes.get('DW_AT_name')
-            cu_file = str(cu_name_attr.value) if cu_name_attr else None
+            cu_dir_attr = top.attributes.get('DW_AT_comp_dir')
+            cu_name = str(cu_name_attr.value) if cu_name_attr else None
+            cu_dir = str(cu_dir_attr.value) if cu_dir_attr else ''
+            # Canonical CU identity: comp_dir + name (full path, not basename).
+            if cu_name and not os.path.isabs(cu_name) and cu_dir:
+                cu_file = os.path.normpath(os.path.join(cu_dir, cu_name))
+            else:
+                cu_file = cu_name
+            if cu_file:
+                cu_file = cu_file.replace('\\', '/')
             for die in cu.iter_DIEs():
                 if die.tag != 'DW_TAG_variable':
                     continue

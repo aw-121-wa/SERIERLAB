@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.2.29
+
+- S14.2.2：CU scope 使用 **完整路径**（`DW_AT_comp_dir`+`DW_AT_name`），不再 basename
+- `App/motor.c` 与 `Drivers/motor.c` 同名 static 可区分；scopeHash 基于全路径
+- `scopePathsMatch` 支持绝对/相对 CU 路径匹配
+
 ## 0.2.28
 
 - S14.2.1 RuntimeSymbol identity：`sha256::scope::expression`（global / file-static CU）
