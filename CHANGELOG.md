@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.2.26
+
+- S14.1 RuntimeSymbolService：光标表达式提取 + 复用 SWD inspect 符号表解析固定地址
+- 支持 global / struct / nested / array[i]；拒绝 ptr、call、变量下标
+- RuntimeSymbol 绑定完整 ELF 内容 SHA256；`isCurrent` 检测 stale firmware
+- 无第二套 DWARF parser；不访问硬件
+
 ## 0.2.25
 
 - S13.1：SWD Channel ID 使用 **ELF 文件内容 SHA-256**（16 hex），不是路径哈希
