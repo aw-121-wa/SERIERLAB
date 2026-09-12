@@ -4,6 +4,7 @@ import { SwdClient } from './client';
 import { resolvePython } from './runtime';
 import { ParameterView } from '../protocol/native/parameterView';
 import { firmwareIdentityFromPath, swdChannelId } from './runtimeChannels';
+import { DwarfSymbolRecord } from '../runtime/runtimeSymbolService';
 
 export type SwdPlotPush = {
   channelId: string;
@@ -27,6 +28,8 @@ export class SwdController implements vscode.Disposable {
   private connecting?: Promise<void>;
   private closing: Promise<void> = Promise.resolve();
   parameters: ParameterView[] = [];
+  /** Flattened DWARF records for RuntimeSymbolService (includes address). */
+  symbolRecords: DwarfSymbolRecord[] = [];
   state = 'disconnected';
   detail = '';
   elfPath = '';
@@ -113,13 +116,24 @@ export class SwdController implements vscode.Disposable {
       if (generation !== this.generation) return;
       const client = this.makeClient(python);
       this.client = client;
-      const result = await client.request<{ parameters: ParameterView[]; verifiedBytes: number }>('connect', cfg.args);
+      const result = await client.request<{
+        parameters: (ParameterView & { address?: number; size?: number })[];
+        verifiedBytes: number;
+      }>('connect', cfg.args);
       if (generation !== this.generation) return;
       this.elfPath = cfg.args.elf;
-      // Firmware identity = content hash. Same path after rebuild ⇒ different identity.
       this.elfSha256 = firmwareIdentityFromPath(cfg.args.elf).sha256;
       this.pollHz = cfg.pollHz;
       this.parameters = result.parameters;
+      this.symbolRecords = result.parameters
+        .filter((p) => typeof p.address === 'number')
+        .map((p) => ({
+          path: p.path,
+          address: p.address!,
+          type: p.type,
+          size: p.type === 'bool' ? 1 : 4,
+          writable: p.writable,
+        }));
       this.state = 'ready'; this.detail = `SWD · 已核对 ${result.verifiedBytes} 字节 Flash`;
       this.changed();
       await this.refresh();
@@ -201,6 +215,7 @@ export class SwdController implements vscode.Disposable {
     this.timer = undefined; this.reading = false; this.writing = false;
     const client = this.client; this.client = undefined;
     this.parameters = []; this.state = 'disconnected'; this.detail = '';
+    this.symbolRecords = [];
     // Drop firmware identity so stale watches cannot be reused after ELF change.
     this.elfPath = ''; this.elfSha256 = ''; this.pollHz = 0;
     this.changed();

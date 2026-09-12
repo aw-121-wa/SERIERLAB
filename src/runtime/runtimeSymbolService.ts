@@ -33,6 +33,8 @@ export type RuntimeSymbol = {
     rootAddress: number;
     byteOffset: number;
   };
+  /** Span in the source document when resolved via resolveAtSource. */
+  sourceSpan?: { startOffset: number; endOffset: number };
 };
 
 export type RuntimeSymbolResolution =
@@ -145,6 +147,14 @@ export class RuntimeSymbolService {
   resolveAtSource(sourceText: string, offset: number, sourceFile?: string): RuntimeSymbolResolution {
     const expr = expressionAtOffset(sourceText, offset);
     if (!expr) return { ok: false, reason: 'no-expression' };
-    return this.resolveExpression(expr.text, sourceFile);
+    const r = this.resolveExpression(expr.text, sourceFile);
+    if (!r.ok) return r;
+    return {
+      ok: true,
+      symbol: {
+        ...r.symbol,
+        sourceSpan: { startOffset: expr.startOffset, endOffset: expr.endOffset },
+      },
+    };
   }
 }

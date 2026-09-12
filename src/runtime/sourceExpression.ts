@@ -68,16 +68,16 @@ function isDigit(ch: string): boolean {
   return ch >= '0' && ch <= '9';
 }
 
-/** Try to parse `[digits]` ending at `end` (end points past ']'). Returns start index or -1. */
+/** Try to parse `[digitsOrIdent]` ending at `end` (end points past ']'). Returns start index or -1. */
 function matchIndexBefore(source: string, end: number): number {
   if (end < 2 || source[end - 1] !== ']') return -1;
   let k = end - 2;
-  let digits = 0;
-  while (k >= 0 && isDigit(source[k]!)) {
+  let chars = 0;
+  while (k >= 0 && (isDigit(source[k]!) || isIdentPart(source[k]!))) {
     k--;
-    digits++;
+    chars++;
   }
-  if (digits === 0 || source[k] !== '[') return -1;
+  if (chars === 0 || source[k] !== '[') return -1;
   return k;
 }
 
@@ -126,8 +126,8 @@ export function expressionAtOffset(source: string, offset: number): SourceExpres
       continue;
     }
     if (ch === '.') {
-      // only continue if an ident part sits before the dot
-      if (start >= 2 && isIdentPart(source[start - 2]!)) {
+      // continue through `ident.` or `].` (member after array index)
+      if (start >= 2 && (isIdentPart(source[start - 2]!) || source[start - 2] === ']')) {
         start--;
         continue;
       }
@@ -150,12 +150,13 @@ export function expressionAtOffset(source: string, offset: number): SourceExpres
     }
     if (source[i] === '[') {
       let j = i + 1;
-      let digits = 0;
-      while (j < source.length && isDigit(source[j]!)) {
+      // Allow [digits] or [ident] so we capture the full span; resolve later rejects non-literal.
+      let chars = 0;
+      while (j < source.length && (isDigit(source[j]!) || isIdentPart(source[j]!))) {
         j++;
-        digits++;
+        chars++;
       }
-      if (digits === 0 || source[j] !== ']') break;
+      if (chars === 0 || source[j] !== ']') break;
       i = j + 1;
       continue;
     }
@@ -164,9 +165,11 @@ export function expressionAtOffset(source: string, offset: number): SourceExpres
 
   const text = source.slice(start, i);
   if (!text) return undefined;
-  // Reject foo( calls. Allow ptr-> (returns base ident only; full deref is unsupported).
+  // foo( is a call — not a runtime variable.
   if (source[i] === '(') return undefined;
-  // Reject if start is not a clean identifier boundary.
+  // ptr->member: do not pretend `ptr` or the member token is a standalone runtime expr
+  // when the cursor is on `->`.
+  if (source[i] === '-' && source[i + 1] === '>') return undefined;
   const before = start > 0 ? source[start - 1]! : '';
   if (isIdentPart(before) || before === '>' || before === '*' || before === ']') return undefined;
   return { text, startOffset: start, endOffset: i };

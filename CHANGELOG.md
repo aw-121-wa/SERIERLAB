@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.2.27
+
+- S14.1.1：拒绝把 `ptr->x` / `foo()` / `motors[i]` 切成伪全局符号
+- S14.2 Runtime Hover：C/C++ 悬停显示类型、缓存 Live 值、地址、ELF id
+- Hover 只读 SWD watch 缓存，不阻塞、不自动轮询、不写变量；stale firmware 不展示旧值
+
 ## 0.2.26
 
 - S14.1 RuntimeSymbolService：光标表达式提取 + 复用 SWD inspect 符号表解析固定地址

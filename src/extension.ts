@@ -6,6 +6,7 @@ import { WebviewToHost } from './webview/bridge';
 import { registerSidebar } from './webview/sidebar';
 import * as state from './state/workspaceState';
 import { resolvePython, installTargetPack } from './swd/runtime';
+import { RuntimeHoverProvider } from './runtime/runtimeHoverProvider';
 
 let controller: AppController | undefined;
 
@@ -14,6 +15,22 @@ export function activate(context: vscode.ExtensionContext): void {
   controller = new AppController(context);
   context.subscriptions.push(controller);
   registerSidebar(context, controller);
+
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      [{ language: 'c' }, { language: 'cpp' }],
+      new RuntimeHoverProvider(
+        () => controller?.getRuntimeSymbolService(),
+        {
+          get firmwareSha256() {
+            return controller?.getHoverRuntimeSource().firmwareSha256 ?? '';
+          },
+          isWatched: (e) => !!controller?.getHoverRuntimeSource().isWatched(e),
+          lookupValue: (e) => controller?.getHoverRuntimeSource().lookupValue(e),
+        }
+      )
+    )
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('serialLab.swd.installRuntime', async () => {

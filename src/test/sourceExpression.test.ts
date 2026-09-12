@@ -25,12 +25,13 @@ describe('expressionAtOffset', () => {
 
   it('rejects pointer / call / variable index', () => {
     const ptr = 'a = ptr->kp;';
-    expect(expressionAtOffset(ptr, ptr.indexOf('ptr'))?.text).toBe('ptr');
+    // Entire ptr->kp is unsupported — do not offer Hover on any part of it.
+    expect(expressionAtOffset(ptr, ptr.indexOf('ptr'))).toBeUndefined();
     const call = 'foo(bar);';
     // foo( is not a fixed-address expression
     expect(expressionAtOffset(call, 0)).toBeUndefined();
     const vi = 'motors[i].speed';
-    expect(expressionAtOffset(vi, 0)?.text).toBe('motors');
+    expect(expressionAtOffset(vi, vi.indexOf('speed'))?.text).toBe('motors[i].speed');
   });
 
   it('skips string and comment', () => {
@@ -50,5 +51,29 @@ describe('expressionAtOffset', () => {
       path: ['[2]', 'speed'],
     });
     expect(splitExpression('ptr->x')).toBeUndefined();
+  });
+
+  it('S14.1.1: does not slice unsupported expressions into fake globals', () => {
+    const ptrSrc = 'int v = ptr->x;';
+    // Any cursor inside ptr->x is unsupported — never fake `x` or slice `ptr`.
+    expect(expressionAtOffset(ptrSrc, ptrSrc.indexOf('x'))).toBeUndefined();
+    expect(expressionAtOffset(ptrSrc, ptrSrc.indexOf('ptr'))).toBeUndefined();
+    const arrow = ptrSrc.indexOf('->');
+    expect(expressionAtOffset(ptrSrc, arrow)).toBeUndefined();
+
+    const call = 'foo(bar);';
+    expect(expressionAtOffset(call, 0)).toBeUndefined();
+    expect(expressionAtOffset(call, 2)).toBeUndefined();
+    expect(expressionAtOffset(call, 3)).toBeUndefined();
+
+    const vi = 'motors[i].speed = 1;';
+    // full span — never just `i` or `speed` alone
+    expect(expressionAtOffset(vi, vi.indexOf('speed'))?.text).toBe('motors[i].speed');
+    const idxPos = vi.indexOf('[i]') + 1;
+    expect(expressionAtOffset(vi, idxPos)?.text).toBe('motors[i].speed');
+
+    const sum = 'a + b';
+    expect(expressionAtOffset(sum, 0)?.text).toBe('a');
+    expect(expressionAtOffset(sum, 4)?.text).toBe('b');
   });
 });

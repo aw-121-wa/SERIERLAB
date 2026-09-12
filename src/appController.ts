@@ -25,6 +25,8 @@ import {
   toParameterView,
 } from './protocol/native/parameterView';
 import { SwdController, SwdPlotPush } from './swd/controller';
+import { RuntimeSymbolService } from './runtime/runtimeSymbolService';
+import { HoverRuntimeSource } from './runtime/runtimeHover';
 import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
 
 export class AppController implements vscode.Disposable {
@@ -41,6 +43,7 @@ export class AppController implements vscode.Disposable {
   private readonly pendingUi: PendingUiQueue;
   readonly plot = new PlotPresenter();
   private native: NativeSession | undefined;
+  private runtimeSymbols: RuntimeSymbolService | undefined;
   private readonly swd: SwdController;
   private parameterSource: 'native' | 'swd' = 'native';
   private parameterEpoch = 0;
@@ -56,6 +59,8 @@ export class AppController implements vscode.Disposable {
           if (p) this.post({ type: 'parameters.update', source: 'swd', epoch: this.parameterEpoch, parameter: p });
           else { ++this.parameterEpoch; this.pushNativeParameters(); }
         }
+        // Keep Hover symbol index in sync with SWD session lifecycle.
+        if (!p) this.rebuildRuntimeSymbols();
       },
       (samples) => this.feedSwdSamples(samples)
     );
@@ -173,6 +178,34 @@ export class AppController implements vscode.Disposable {
       const value = this.series.lastValue(c.id);
       return value === undefined ? { ...c } : { ...c, value };
     });
+  }
+
+  private rebuildRuntimeSymbols(): void {
+    if (this.swd.state !== 'ready' || !this.swd.elfSha256 || !this.swd.symbolRecords.length) {
+      this.runtimeSymbols = undefined;
+      return;
+    }
+    this.runtimeSymbols = new RuntimeSymbolService({
+      elfPath: this.swd.elfPath,
+      firmwareSha256: this.swd.elfSha256,
+      symbols: this.swd.symbolRecords,
+    });
+  }
+
+  getRuntimeSymbolService(): RuntimeSymbolService | undefined {
+    return this.runtimeSymbols;
+  }
+
+  getHoverRuntimeSource(): HoverRuntimeSource {
+    return {
+      firmwareSha256: this.swd.elfSha256,
+      isWatched: (expression) => this.swd.parameters.some((p) => p.path === expression),
+      lookupValue: (expression) => {
+        const p = this.swd.parameters.find((x) => x.path === expression);
+        if (!p || p.confirmedValue === undefined) return undefined;
+        return { value: p.confirmedValue };
+      },
+    };
   }
 
   /** S13: SWD poll → unified Channel → SeriesStore → Plot (same path as UART). */
