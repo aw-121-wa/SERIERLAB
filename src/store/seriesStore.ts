@@ -36,6 +36,22 @@ export class SeriesStore {
     this.ringFor(id);
   }
 
+  /** Newest sample on a channel, or undefined if empty. */
+  lastValue(id: string): number | undefined {
+    const r = this.rings.get(id);
+    if (!r || r.count === 0) return undefined;
+    return r.yAt(r.count - 1);
+  }
+
+  /** Newest sample per channel (id → value). */
+  lastValues(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [id, r] of this.rings) {
+      if (r.count > 0) out[id] = r.yAt(r.count - 1);
+    }
+    return out;
+  }
+
   append(tMs: number, values: number[], channelIds: string[]): void {
     for (let i = 0; i < channelIds.length; i++) {
       const id = channelIds[i]!;
@@ -50,10 +66,14 @@ export class SeriesStore {
     }
   }
 
+  /**
+   * Display/snapshot window for all channels.
+   * Hidden channels are still included (visible=false) so the webview can re-show them
+   * without a host round-trip; visibility is presentation-only.
+   */
   getWindow(maxPoints = 4000): ChannelWindow[] {
     const out: ChannelWindow[] = [];
     for (const [id, meta] of this.meta) {
-      if (!meta.visible) continue;
       const ring = this.rings.get(id);
       const n = ring?.count ?? 0;
       const series = minMaxDownsampleFrom(

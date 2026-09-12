@@ -61,19 +61,45 @@ body {
   text-overflow: ellipsis;
 }
 
+.toolbar .hint {
+  opacity: 0.55;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+#plot {
+  cursor: crosshair;
+  position: relative;
+}
+
+#plot:focus {
+  outline: none;
+}
+
+/* Emphasize the zero baseline once uPlot paints grids. */
+#plot .u-grid,
+#plot .u-axis {
+  --zero: rgba(200, 200, 200, 0.45);
+}
+
 #plot {
   height: 280px;
   flex-shrink: 0;
   padding: 4px;
+  position: relative;
+  overflow: hidden;
 }
 
 #legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 4px 10px;
   padding: 4px 10px;
   flex-shrink: 0;
   font-size: 12px;
+  max-height: 72px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--vscode-panel-border, #444);
 }
 
 #legend label {
@@ -81,6 +107,10 @@ body {
   align-items: center;
   gap: 3px;
   cursor: pointer;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .term-wrap {
@@ -88,6 +118,9 @@ body {
   min-height: 0;
   display: flex;
   border-top: 1px solid var(--vscode-panel-border, #444);
+  position: relative;
+  z-index: 1;
+  background: var(--vscode-editor-background);
 }
 
 .term {

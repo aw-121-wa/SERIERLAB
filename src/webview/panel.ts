@@ -50,7 +50,11 @@ function getHtml(webview: vscode.Webview, ext: vscode.Uri): string {
     <button id="pause">暂停</button>
     <button id="clear-term">清空终端</button>
     <button id="clear-wave">清空波形</button>
+    <button id="reset-zoom" title="双击图区也可重置">重置缩放</button>
+    <button id="follow-live" title="实时跟随最新数据">跟随:开</button>
+    <span class="hint">滚轮/框选自由缩放 · 跟随开时新数据会向前滚 · 重置恢复全览</span>
     <label>RX <select id="rx-enc"><option value="text">文本</option><option value="hex">HEX</option></select></label>
+    <span id="span-info" class="hint"></span>
     <span id="status" class="status"></span>
   </div>
   <div id="plot"></div>

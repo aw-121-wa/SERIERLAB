@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { AppController } from '../appController';
 import * as state from '../state/workspaceState';
 import { getNonce } from './nonce';
+import { revealPanel } from './panel';
+import { WebviewToHost } from './bridge';
 
 export function registerSidebar(
   context: vscode.ExtensionContext,
@@ -63,6 +65,9 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
       <button id="connect" class="primary">连接</button>
       <button id="disconnect">断开</button>
     </div>
+    <div class="row">
+      <button id="open-workbench" class="primary grow" title="打开波形 / 终端面板">打开波形面板</button>
+    </div>
   </section>
   <section class="section">
     <h3>协议</h3>
@@ -111,8 +116,14 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
           await state.saveConnection(c);
           await this.controller.connect();
           this.pushMirror();
+          if (this.controller.serial.getState() === 'connected') {
+            this.openWorkbench();
+          }
           break;
         }
+        case 'openWorkbench':
+          this.openWorkbench();
+          break;
         case 'disconnect':
           await this.controller.disconnect();
           this.pushMirror();
@@ -170,6 +181,12 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     });
   }
 
+  private openWorkbench(): void {
+    revealPanel(this.context, (m) =>
+      this.controller.handleWebviewMessage(m as WebviewToHost)
+    );
+  }
+
   private async pushPorts(): Promise<void> {
     try {
       const ports = await this.controller.serial.listPorts();
@@ -189,7 +206,7 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private pushMirror(): void {
     void this.post({
       type: 'channels',
-      channels: this.controller.channels.list(),
+      channels: this.controller.channelViews(),
     });
     void this.post({
       type: 'connState',
@@ -199,7 +216,7 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
   private startMirror(): void {
     this.stopMirror();
-    this.mirrorTimer = setInterval(() => this.pushMirror(), 500);
+    this.mirrorTimer = setInterval(() => this.pushMirror(), 200);
   }
 
   private stopMirror(): void {

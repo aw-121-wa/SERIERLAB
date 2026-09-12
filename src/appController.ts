@@ -6,6 +6,7 @@ import { SeriesStore } from './store/seriesStore';
 import { ChannelRegistry } from './store/channels';
 import { PendingUiQueue } from './store/pendingUiQueue';
 import { SessionClock } from './time/sessionClock';
+import { PlotPresenter } from './plot/plotPresenter';
 import * as state from './state/workspaceState';
 import { decodeHex, encodeHex } from './protocol/hex';
 import { log } from './log';
@@ -23,6 +24,7 @@ export class AppController implements vscode.Disposable {
   readonly clock = new SessionClock();
   private customConfig: CustomProtocolConfig | undefined;
   private readonly pendingUi: PendingUiQueue;
+  private readonly plot = new PlotPresenter();
   private paused = false;
   private rxEncoding: 'text' | 'hex' = 'text';
   private timer: NodeJS.Timeout | undefined;
@@ -80,7 +82,16 @@ export class AppController implements vscode.Disposable {
 
   reloadProtocol(): void {
     this.applyProtocolFromState();
+    this.plot.bumpGeneration('protocol');
     this.pushStatus();
+  }
+
+  /** Channel list plus live last sample (for sidebar readout). */
+  channelViews(): { id: string; name: string; color: string; visible: boolean; value?: number }[] {
+    return this.channels.list().map((c) => {
+      const value = this.series.lastValue(c.id);
+      return value === undefined ? c : { ...c, value };
+    });
   }
 
   private onRx(bytes: Uint8Array): void {
@@ -97,25 +108,34 @@ export class AppController implements vscode.Disposable {
         this.series.setMeta(id, { name: view?.name ?? id, color: view?.color, visible: view?.visible });
       }
       this.series.append(b.tMs, b.values, ids);
+      this.plot.addPoints(b.tMs, b.values, ids);
     }
   }
 
   handleWebviewMessage(msg: WebviewToHost): void {
     switch (msg.type) {
       case 'ready':
+        this.plot.requestSnapshot('ready');
         this.pushStatus();
+        this.flushUi();
+        break;
+      case 'plot.needSnapshot':
+        this.plot.requestSnapshot(msg.reason ?? 'needSnapshot');
         this.flushUi();
         break;
       case 'pause':
         this.paused = msg.paused;
+        this.plot.setPaused(msg.paused);
         if (!msg.paused) {
           // Resume: do not replay the entire pause backlog into the terminal.
           this.pendingUi.trimForResume();
           this.pushStatus();
+          this.flushUi();
         }
         break;
       case 'toggleChannel': {
         this.channels.setVisible(msg.id, msg.visible);
+        this.series.setMeta(msg.id, { visible: msg.visible });
         void state.saveChannelPrefs(this.channels.toSaved());
         this.pushStatus();
         break;
@@ -133,6 +153,7 @@ export class AppController implements vscode.Disposable {
         break;
       case 'clearWaveform':
         this.series.clear();
+        this.post(this.plot.buildReset('clear'));
         break;
     }
   }
@@ -205,6 +226,7 @@ export class AppController implements vscode.Disposable {
       channels: this.channels.list(),
       droppedUiEntries: this.pendingUi.droppedEntryCount,
       droppedUiBytes: this.pendingUi.droppedByteCount,
+      tMs: this.nowMs(),
     });
   }
 
@@ -222,10 +244,10 @@ export class AppController implements vscode.Disposable {
         })),
       });
     }
-    const series = this.series.getWindow(3000);
-    if (series.some((s) => s.xs.length)) {
-      this.post({ type: 'samples', t: this.nowMs(), series });
-    }
+    const plotMsgs = this.plot.flush((maxPoints) => this.series.getWindow(maxPoints));
+    for (const m of plotMsgs) this.post(m);
+    // Keep RX/TX/err ticking while data flows (was only pushed on rare events).
+    this.pushStatus();
   }
 
   dispose(): void {

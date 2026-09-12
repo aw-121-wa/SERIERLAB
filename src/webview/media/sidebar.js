@@ -40,31 +40,73 @@
     if (!portEl.value && ports.length === 1) portEl.value = ports[0].path;
   }
 
+  function formatValue(v) {
+    if (v == null || !isFinite(v)) return '—';
+    var a = Math.abs(v);
+    if (a >= 1000) return v.toFixed(1);
+    if (a >= 10) return v.toFixed(2);
+    if (a >= 0.01) return v.toFixed(3);
+    if (a === 0) return '0';
+    return v.toExponential(2);
+  }
+
+  /** Update live values in place; rebuild DOM only when the channel set changes. */
+  var channelKey = '';
   function fillChannels(channels) {
-    channelsEl.innerHTML = '';
-    if (!channels || channels.length === 0) {
-      const li = document.createElement('li');
-      li.className = 'empty';
-      li.textContent = '（暂无通道）';
-      channelsEl.appendChild(li);
-      return;
+    var key = (channels || []).map(function (c) { return c.id; }).join('|');
+    if (key !== channelKey) {
+      channelKey = key;
+      channelsEl.innerHTML = '';
+      if (!channels || channels.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = '（暂无通道）';
+        channelsEl.appendChild(li);
+        return;
+      }
+      for (const c of channels) {
+        const li = document.createElement('li');
+        li.dataset.id = c.id;
+        const swatch = document.createElement('span');
+        swatch.className = 'swatch';
+        swatch.style.background = c.color || '#888';
+        const name = document.createElement('span');
+        name.className = 'ch-name';
+        name.textContent = c.name || c.id;
+        const val = document.createElement('span');
+        val.className = 'ch-value';
+        val.textContent = '—';
+        const vis = document.createElement('span');
+        vis.className = 'ch-vis';
+        vis.textContent = c.visible ? '显示' : '隐藏';
+        if (!c.visible) li.classList.add('hidden-ch');
+        li.appendChild(swatch);
+        li.appendChild(name);
+        li.appendChild(val);
+        li.appendChild(vis);
+        channelsEl.appendChild(li);
+      }
     }
-    for (const c of channels) {
-      const li = document.createElement('li');
-      const swatch = document.createElement('span');
-      swatch.className = 'swatch';
-      swatch.style.background = c.color || '#888';
-      const name = document.createElement('span');
-      name.className = 'ch-name';
-      name.textContent = c.name || c.id;
-      const vis = document.createElement('span');
-      vis.className = 'ch-vis';
-      vis.textContent = c.visible ? '显示' : '隐藏';
-      if (!c.visible) li.classList.add('hidden-ch');
-      li.appendChild(swatch);
-      li.appendChild(name);
-      li.appendChild(vis);
-      channelsEl.appendChild(li);
+    // Refresh values / visibility without destroying nodes.
+    var byId = {};
+    for (var i = 0; i < (channels || []).length; i++) {
+      byId[channels[i].id] = channels[i];
+    }
+    var items = channelsEl.querySelectorAll('li[data-id]');
+    for (var j = 0; j < items.length; j++) {
+      var li = items[j];
+      var c = byId[li.dataset.id];
+      if (!c) continue;
+      var valEl = li.querySelector('.ch-value');
+      if (valEl) valEl.textContent = formatValue(c.value);
+      var visEl = li.querySelector('.ch-vis');
+      if (visEl) visEl.textContent = c.visible ? '显示' : '隐藏';
+      if (c.visible) li.classList.remove('hidden-ch');
+      else li.classList.add('hidden-ch');
+      var sw = li.querySelector('.swatch');
+      if (sw && c.color) sw.style.background = c.color;
+      var nm = li.querySelector('.ch-name');
+      if (nm) nm.textContent = c.name || c.id;
     }
   }
 
@@ -87,6 +129,10 @@
       path: selectedPath(),
       baudRate: currentBaud(),
     });
+  });
+
+  document.getElementById('open-workbench').addEventListener('click', function () {
+    vscode.postMessage({ type: 'openWorkbench' });
   });
 
   document.getElementById('disconnect').addEventListener('click', function () {

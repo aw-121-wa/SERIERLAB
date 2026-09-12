@@ -132,7 +132,18 @@ button.primary:hover {
   white-space: nowrap;
 }
 
+.ch-value {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
+  opacity: 0.95;
+  min-width: 4.5em;
+  text-align: right;
+  color: var(--vscode-charts-green, #89d185);
+}
+
 .ch-vis {
   opacity: 0.7;
   font-size: 11px;
+  min-width: 2.5em;
+  text-align: right;
 }

@@ -161,6 +161,28 @@ describe('SeriesStore', () => {
     expect(csv).toContain('777');
   });
 
+  it('getWindow includes hidden channels (presentation can re-show them)', () => {
+    const s = new SeriesStore(1_000_000, 100);
+    s.append(1, [1, 2], ['a', 'b']);
+    s.setMeta('b', { visible: false });
+    const w = s.getWindow(100);
+    expect(w.map((c) => c.id).sort()).toEqual(['a', 'b']);
+    expect(w.find((c) => c.id === 'b')!.visible).toBe(false);
+    expect(w.find((c) => c.id === 'b')!.ys).toEqual([2]);
+    s.setMeta('b', { visible: true });
+    const w2 = s.getWindow(100);
+    expect(w2.find((c) => c.id === 'b')!.visible).toBe(true);
+  });
+
+  it('lastValue / lastValues expose newest samples', () => {
+    const s = new SeriesStore(60_000, 100);
+    expect(s.lastValue('a')).toBeUndefined();
+    s.append(1, [1.5, 2.5], ['a', 'b']);
+    s.append(2, [9.25, 3], ['a', 'b']);
+    expect(s.lastValue('a')).toBe(9.25);
+    expect(s.lastValues()).toEqual({ a: 9.25, b: 3 });
+  });
+
   it('skips non-finite values', () => {
     const s = new SeriesStore(1_000_000, 10);
     s.append(1, [1, NaN], ['a', 'b']);
