@@ -52,6 +52,11 @@ export class ProtocolRouter {
         this.decoder = new RawDataDecoder();
         this.blocked = false;
         break;
+      case 'native':
+        // Telemetry SampleBatch path unused; NativeSession owns the wire.
+        this.decoder = new RawDataDecoder();
+        this.blocked = false;
+        break;
       case 'custom': {
         const d = new CustomProtocolDecoder(config!, { scriptAllowed: options?.scriptAllowed });
         this.decoder = d;

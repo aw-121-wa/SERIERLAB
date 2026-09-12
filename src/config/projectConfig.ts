@@ -6,7 +6,7 @@
 export type SerialLabParity = 'none' | 'even' | 'odd' | 'mark' | 'space';
 export type SerialLabStopBits = 1 | 1.5 | 2;
 export type SerialLabFlowControl = 'none' | 'hardware' | 'software';
-export type SerialLabProtocolKind = 'raw' | 'justfloat' | 'firewater' | 'custom';
+export type SerialLabProtocolKind = 'raw' | 'justfloat' | 'firewater' | 'custom' | 'native';
 
 export type ProjectSerialConfig = {
   baudRate?: number;
@@ -89,8 +89,8 @@ function parseProtocol(
 ): { ok: true; protocol: ProjectProtocolConfig } | { ok: false; error: string } {
   if (!isObj(raw)) return { ok: false, error: 'protocol must be an object' };
   const kind = raw.kind;
-  if (!['raw', 'justfloat', 'firewater', 'custom'].includes(kind as string)) {
-    return { ok: false, error: 'protocol.kind must be raw|justfloat|firewater|custom' };
+  if (!['raw', 'justfloat', 'firewater', 'custom', 'native'].includes(kind as string)) {
+    return { ok: false, error: 'protocol.kind must be raw|justfloat|firewater|custom|native' };
   }
   if (kind === 'custom') {
     if (typeof raw.customId !== 'string' || !raw.customId.trim()) {

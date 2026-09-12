@@ -46,7 +46,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["raw", "justfloat", "firewater", "custom"]
+          "enum": ["raw", "justfloat", "firewater", "custom", "native"]
         },
         "customId": {
           "type": "string",

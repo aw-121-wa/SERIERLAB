@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.2.17
+
+- S10 Native Runtime Control Protocol v1（PC 端）：COBS+0x00 帧、CRC-16/CCITT-FALSE、HELLO/PARAM_* 消息
+- ParameterStore / RequestManager / NativeSession；golden wire vectors
+- `protocol.kind = native`；连接后自动 HELLO + parameter discovery
+- 不改动 JustFloat/FireWater/Raw/Custom wire format
+
 ## 0.2.16
 
 - S9 `.seriallab.json` v1：versioned 项目配置（serial framing / protocol / channel 展示）

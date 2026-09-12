@@ -6,4 +6,4 @@ export interface StreamDecoder {
   readonly errors: number;
 }
 
-export type BuiltinProtocolId = 'justfloat' | 'firewater' | 'raw';
+export type BuiltinProtocolId = 'justfloat' | 'firewater' | 'raw' | 'native';

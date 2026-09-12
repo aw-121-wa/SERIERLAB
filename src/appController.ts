@@ -16,6 +16,8 @@ import { formatRawLog } from './export/exportService';
 import { getPanel } from './webview/panel';
 import { CustomProtocolConfig } from './protocol/custom';
 import { toSerialPortOpenOptions } from './serial/framing';
+import { NativeSession } from './protocol/native/nativeSession';
+import { NativeParamValue, ParameterDescriptor } from './protocol/native/types';
 import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
 
 export class AppController implements vscode.Disposable {
@@ -30,7 +32,8 @@ export class AppController implements vscode.Disposable {
   private readonly lastRx = new LastRxTracker();
   private customConfig: CustomProtocolConfig | undefined;
   private readonly pendingUi: PendingUiQueue;
-  private readonly plot = new PlotPresenter();
+  readonly plot = new PlotPresenter();
+  private native: NativeSession | undefined;
   private paused = false;
   private rxEncoding: 'text' | 'hex' = 'text';
   private timer: NodeJS.Timeout | undefined;
@@ -145,6 +148,10 @@ export class AppController implements vscode.Disposable {
     this.lastRx.update(t);
     this.raw.push(bytes, 'RX', t);
     this.pendingUi.push(t, 'RX', bytes);
+    if (this.router.protocolKind === 'native') {
+      this.native?.feed(bytes);
+      return;
+    }
     if (this.router.protocolKind === 'raw') return;
     const batches = this.router.feed(bytes, t);
     for (const b of batches) {
@@ -263,13 +270,42 @@ export class AppController implements vscode.Disposable {
       log.info(
         `Connected ${open.path} @ ${open.baudRate} ${open.dataBits}${String(open.parity)[0]}${open.stopBits} rtscts=${open.rtscts} xon=${open.xon}`
       );
+      if (this.router.protocolKind === 'native') {
+        this.native = new NativeSession((b) => {
+          void this.serial.write(b).catch((e) => log.error(`native tx: ${(e as Error).message}`));
+        });
+        void this.native.startHandshake().catch((e) => {
+          log.warn(`native handshake: ${(e as Error).message}`);
+        });
+      }
     } catch (e) {
       void vscode.window.showErrorMessage(`Serial Lab connect failed: ${(e as Error).message}`);
     }
   }
 
   async disconnect(): Promise<void> {
+    this.native?.disconnect();
+    this.native = undefined;
     await this.serial.disconnect();
+  }
+
+  /** S12 API: list discovered native parameters. */
+  listNativeParameters(): ParameterDescriptor[] {
+    return this.native?.getParameters() ?? [];
+  }
+
+  getNativeParameter(idOrPath: number | string) {
+    return this.native?.getParameter(idOrPath);
+  }
+
+  async setNativeParameter(id: number, value: NativeParamValue): Promise<NativeParamValue> {
+    if (!this.native) throw new Error('native session not active');
+    return this.native.setParameter(id, value);
+  }
+
+  async getNativeParameterValue(id: number): Promise<NativeParamValue | undefined> {
+    if (!this.native) throw new Error('native session not active');
+    return this.native.getParameterAsync(id);
   }
 
   exportSamples(uri: vscode.Uri): void {
