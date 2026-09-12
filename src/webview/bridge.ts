@@ -75,7 +75,7 @@ export type HostToWebview =
 export type WebviewToHost =
   | { type: 'ready' }
   | { type: 'parameters.source'; source: 'native' | 'swd' }
-  | { type: 'swd.action'; action: 'connect' | 'disconnect' | 'elf' | 'watch' | 'refresh' | 'settings' | 'help' }
+  | { type: 'swd.action'; action: 'connect' | 'disconnect' | 'elf' | 'watch' | 'refresh' | 'settings' | 'help' | 'runtime' | 'pack' }
   | { type: 'plot.needSnapshot'; reason?: string }
   | { type: 'pause'; paused: boolean }
   | { type: 'toggleChannel'; id: string; visible: boolean }

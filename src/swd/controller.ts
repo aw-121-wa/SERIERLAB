@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { SwdClient } from './client';
+import { resolvePython } from './runtime';
 import { ParameterView } from '../protocol/native/parameterView';
 
 export class SwdController implements vscode.Disposable {
@@ -26,7 +27,7 @@ export class SwdController implements vscode.Disposable {
     const pollHz = cfg.get<number>('swd.pollHz', 5);
     if (!Number.isFinite(pollHz) || pollHz < 0 || pollHz > 20) throw new Error('swd.pollHz 必须为 0..20');
     return {
-      python: cfg.get<string>('swd.pythonPath', 'python'),
+      python: cfg.get<string>('swd.pythonPath', ''),
       pollHz,
       args: {
         elf: path.isAbsolute(elf) ? elf : path.resolve(root!, elf),
@@ -52,7 +53,7 @@ export class SwdController implements vscode.Disposable {
 
   async chooseWatches(): Promise<void> {
     const cfg = this.settings();
-    const helper = this.makeClient(cfg.python);
+    const helper = this.makeClient(await resolvePython(this.context));
     try {
       const result = await helper.request<{ symbols: { path: string; type: string; address: number }[] }>('inspect', { elf: cfg.args.elf });
       const old = cfg.args.watch as { path: string; min?: number; max?: number }[];
@@ -84,7 +85,9 @@ export class SwdController implements vscode.Disposable {
       await cleanup;
       if (generation !== this.generation) return;
       const cfg = this.settings();
-      const client = this.makeClient(cfg.python);
+      const python = await resolvePython(this.context);
+      if (generation !== this.generation) return;
+      const client = this.makeClient(python);
       this.client = client;
       const result = await client.request<{ parameters: ParameterView[]; verifiedBytes: number }>('connect', cfg.args);
       if (generation !== this.generation) return;

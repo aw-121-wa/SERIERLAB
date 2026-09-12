@@ -70,6 +70,8 @@ function getHtml(webview: vscode.Webview, ext: vscode.Uri): string {
           <button data-swd="elf">选择 ELF</button>
           <button data-swd="watch">选择参数</button>
           <button data-swd="settings">SWD 设置</button>
+          <button data-swd="runtime">安装/修复环境</button>
+          <button data-swd="pack">安装芯片支持</button>
           <button data-swd="help">使用说明</button>
           <button data-swd="connect">连接 SWD</button>
           <button data-swd="disconnect">断开 SWD</button>

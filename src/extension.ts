@@ -5,6 +5,7 @@ import { revealPanel } from './webview/panel';
 import { WebviewToHost } from './webview/bridge';
 import { registerSidebar } from './webview/sidebar';
 import * as state from './state/workspaceState';
+import { resolvePython, installTargetPack } from './swd/runtime';
 
 let controller: AppController | undefined;
 
@@ -15,6 +16,14 @@ export function activate(context: vscode.ExtensionContext): void {
   registerSidebar(context, controller);
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('serialLab.swd.installRuntime', async () => {
+      try { await resolvePython(context, true); void vscode.window.showInformationMessage('SWD 环境已就绪'); }
+      catch (e) { void vscode.window.showErrorMessage(`Serial Lab SWD: ${(e as Error).message}`); }
+    }),
+    vscode.commands.registerCommand('serialLab.swd.installTargetPack', async () => {
+      try { await installTargetPack(context); }
+      catch (e) { void vscode.window.showErrorMessage(`Serial Lab SWD: ${(e as Error).message}`); }
+    }),
     vscode.commands.registerCommand('serialLab.openWorkbench', () => {
       revealPanel(context, (m) => controller!.handleWebviewMessage(m as WebviewToHost));
     }),

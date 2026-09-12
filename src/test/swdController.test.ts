@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('../swd/runtime', () => ({ resolvePython: vi.fn(async () => 'python') }));
 const env = vi.hoisted(() => ({ clients: [] as any[], trusted: true, pollHz: 0 }));
 vi.mock('vscode', () => ({
   workspace: {
@@ -16,8 +17,18 @@ vi.mock('../swd/client', () => ({ SwdClient: class {
   constructor() { env.clients.push(this); }
 } }));
 import { SwdController } from '../swd/controller';
+import { resolvePython } from '../swd/runtime';
 
 describe('SWD controller lifecycle', () => {
+  it('disconnect during runtime preparation prevents attachment', async () => {
+    let release!: (value: string) => void;
+    vi.mocked(resolvePython).mockImplementationOnce(() => new Promise(r => { release = r; }));
+    const c = new SwdController({ extensionUri: 'ext' } as any, vi.fn());
+    const connecting = c.connect();
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    await c.disconnect(); release('python'); await connecting;
+    expect(env.clients).toHaveLength(0); expect(c.state).toBe('disconnected');
+  });
   beforeEach(() => { env.clients = []; env.trusted = true; env.pollHz = 0; });
   it('coalesces concurrent connection attempts into one owned helper', async () => {
     const c = new SwdController({ extensionUri: 'ext' } as any, vi.fn());

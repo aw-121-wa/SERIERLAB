@@ -1,2 +1,2 @@
-pyocd>=0.43,<1
-pyelftools>=0.32,<1
+pyocd==0.45.1
+pyelftools==0.33

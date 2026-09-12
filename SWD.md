@@ -1,13 +1,13 @@
 # SWD / DAPLink 运行态调参
 
-Serial Lab 0.2.22 保留 Native 串口调参，另增 SWD 参数来源。两条连接独立：可以继续用串口采样，同时通过 DAPLink 修改 RAM 参数。STM32 无需 Serial Lab SDK、串口协议或调参任务。
+Serial Lab 0.2.23 保留 Native 串口调参，另增 SWD 参数来源。两条连接独立：可以继续用串口采样，同时通过 DAPLink 修改 RAM 参数。STM32 无需 Serial Lab SDK、串口协议或调参任务。
 
 ## 安装与连接
 
-1. 准备 Python **3.11 或更新的兼容版本**，推荐 3.11。给该解释器安装依赖：
+1. 默认无需安装 Python。保持 `serialLab.swd.pythonPath` 为空，首次选择 ELF 或连接 SWD 时点击“安装”。插件会下载独立 Python 3.11、pyOCD 0.45.1 和 pyelftools 0.33，以后直接复用。已有自定义 Python 配置会优先使用；若要自动管理，请手动清空此设置。离线或需要自行管理时，给自己的 Python 安装依赖并填写解释器路径：
 
    ```powershell
-   python -m pip install "pyocd>=0.43,<1" "pyelftools>=0.32,<1"
+   python -m pip install "pyocd==0.45.1" "pyelftools==0.33"
    python -m pyocd list --probes
    python -m pyocd list --targets
    ```
@@ -25,11 +25,22 @@ Serial Lab 0.2.22 保留 Native 串口调参，另增 SWD 参数来源。两条�
 
 ## 设置示例
 
+### 自动环境维护
+
+- 命令面板执行 **Serial Lab: Install / Repair SWD Environment** 可重新安装托管环境。自定义 Python 模式下只检查环境，不改动它。
+- 缺少芯片型号时，先配置 `serialLab.swd.target`，再执行 **Serial Lab: Install SWD Target Pack**，完成后重新连接。此操作不连接或烧录芯片。芯片包使用 pyOCD 自己的用户缓存。
+- 自动安装支持 Windows x64、macOS x64/arm64、Linux glibc x64/arm64，需要系统 `tar`。其他平台使用自定义 Python。USB 驱动和 Linux 设备访问权限仍需按 pyOCD 文档配置。
+- 首次安装需要访问 GitHub、Python 下载源和 PyPI；支持 VS Code `http.proxy` 或 `HTTPS_PROXY`。离线电脑可预先准备自定义 Python 环境。安装失败查看 **Serial Lab SWD Setup** 输出并重试。
+- Python、环境和 uv 缓存保存在扩展 `globalStorageUri/swd/runtime-v1`，不写入固件工程、不修改系统 PATH。安装使用独立目录，验证成功后切换；旧环境保留，清理时先关闭所有 VS Code 窗口。崩溃遗留的 `install.lock` 也只应在关闭所有窗口后删除。
+- uv 固定为 0.8.22，下载后校验 SHA-256；Python 固定为 3.11 系列，pyOCD/pyelftools 固定顶层版本，间接依赖由安装器解析。uv 使用 MIT/Apache-2.0，pyOCD 使用 Apache-2.0，pyelftools 使用公共领域许可；Python 及芯片包分别遵循其上游许可。插件按需下载这些组件，不将整个 Python 环境打入 VSIX。
+
+官方说明：[uv Python 管理](https://docs.astral.sh/uv/guides/install-python/)、[pyOCD 芯片包](https://pyocd.io/docs/open_cmsis_pack_support.html)。
+
 以下芯片 ID 仅作示例，必须换成实际芯片对应的 ID：
 
 ```json
 {
-  "serialLab.swd.pythonPath": "python",
+  "serialLab.swd.pythonPath": "",
   "serialLab.swd.elf": "build/firmware.elf",
   "serialLab.swd.target": "stm32f407vg",
   "serialLab.swd.probeId": "",

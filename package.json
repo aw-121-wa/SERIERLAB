@@ -2,10 +2,13 @@
   "name": "serial-lab",
   "displayName": "Serial Lab",
   "description": "Serial debugging workbench: protocols, waveform, terminal, export",
-  "version": "0.2.22",
+  "version": "0.2.23",
   "icon": "images/icon.png",
   "publisher": "czt123",
-  "repository": { "type": "git", "url": "https://github.com/aw-121-wa/SERIERLAB.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aw-121-wa/SERIERLAB.git"
+  },
   "license": "SEE LICENSE IN LICENSE",
   "galleryBanner": {
     "color": "#1e1e1e",
@@ -76,6 +79,14 @@
       {
         "command": "serialLab.editProjectConfig",
         "title": "Serial Lab: Edit Project Configuration"
+      },
+      {
+        "command": "serialLab.swd.installRuntime",
+        "title": "Serial Lab: Install / Repair SWD Environment"
+      },
+      {
+        "command": "serialLab.swd.installTargetPack",
+        "title": "Serial Lab: Install SWD Target Pack"
       }
     ],
     "jsonValidation": [
@@ -88,34 +99,62 @@
       "title": "Serial Lab",
       "properties": {
         "serialLab.swd.pythonPath": {
-          "type": "string", "default": "python",
-          "description": "Python executable with pyocd and pyelftools installed. An executable path, not a shell command."
+          "type": "string",
+          "default": "",
+          "description": "Empty installs a private SWD Python environment on first use. Set an executable path to use your own Python with pyocd and pyelftools."
         },
         "serialLab.swd.elf": {
-          "type": "string", "default": "",
+          "type": "string",
+          "default": "",
           "description": "ELF/AXF with DWARF matching the flashed firmware. Relative to the first workspace folder."
         },
         "serialLab.swd.target": {
-          "type": "string", "default": "",
+          "type": "string",
+          "default": "",
           "description": "Exact pyOCD target ID (pyocd list --targets). Required for target RAM/Flash validation."
         },
         "serialLab.swd.probeId": {
-          "type": "string", "default": "",
+          "type": "string",
+          "default": "",
           "description": "Full probe unique ID. Empty accepts exactly one connected probe."
         },
         "serialLab.swd.frequency": {
-          "type": "integer", "default": 1000000, "minimum": 10000, "maximum": 10000000,
+          "type": "integer",
+          "default": 1000000,
+          "minimum": 10000,
+          "maximum": 10000000,
           "description": "SWD clock in Hz. Start with 1 MHz."
         },
         "serialLab.swd.pollHz": {
-          "type": "number", "default": 5, "minimum": 0, "maximum": 20,
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 20,
           "description": "Watch refresh frequency. 0 = manual refresh only. Reads never overlap. Reconnect after changes."
         },
         "serialLab.swd.watch": {
-          "type": "array", "default": [], "maxItems": 64,
+          "type": "array",
+          "default": [],
+          "maxItems": 64,
           "description": "RAM symbols to watch, e.g. yaw_kp, pid.kp, gains[0]. Reconnect after changes. Limits are enforced on the host.",
-          "items": { "type": "object", "required": ["path"], "additionalProperties": false,
-            "properties": { "path": { "type": "string", "minLength": 1 }, "min": { "type": "number" }, "max": { "type": "number" } }
+          "items": {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              }
+            }
           }
         },
         "serialLab.connection": {
@@ -200,6 +239,7 @@
     "package": "vsce package"
   },
   "dependencies": {
+    "https-proxy-agent": "^7.0.6",
     "serialport": "^12.0.0",
     "uplot": "^1.6.32"
   },

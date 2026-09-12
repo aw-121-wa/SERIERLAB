@@ -348,6 +348,8 @@ export class AppController implements vscode.Disposable {
       else if (action === 'elf') await this.swd.chooseElf();
       else if (action === 'watch') await this.swd.chooseWatches();
       else if (action === 'refresh') await this.swd.refresh();
+      else if (action === 'runtime') await vscode.commands.executeCommand('serialLab.swd.installRuntime');
+      else if (action === 'pack') await vscode.commands.executeCommand('serialLab.swd.installTargetPack');
       else if (action === 'settings') await vscode.commands.executeCommand('workbench.action.openSettings', 'serialLab.swd');
       else if (action === 'help') await vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.joinPath(this.context.extensionUri, 'SWD.md'));
     } catch (e) { void vscode.window.showErrorMessage(`Serial Lab SWD: ${(e as Error).message}`); }

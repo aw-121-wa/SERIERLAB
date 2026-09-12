@@ -6,6 +6,8 @@
 .tmp_firmware_yaw/**
 .tmp_firmware_yaw_base/**
 .venv-swd/**
+.tmp_managed_swd/**
+scripts/test_managed_swd.cjs
 scripts/__pycache__/**
 scripts/test_*.py
 scripts/fixtures/**
