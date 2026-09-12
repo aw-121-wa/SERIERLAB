@@ -270,43 +270,53 @@
 
     if (!uplot || uplot.__key !== key) {
       if (uplot) uplot.destroy();
-      userXZoom = false;
-      userYZoom = false;
       uplot = new uPlot(opts, data, el);
       uplot.__key = key;
+      // Constructor fires initial auto setScale hooks — do not treat as user zoom.
+      userXZoom = false;
+      userYZoom = false;
       applyFollow();
     } else {
       uplot.setData(data, false);
       syncSeriesVisibility(list);
-      // setData() can drop a same-tick setScale; re-apply on next frame.
-      applyFollow();
-      scheduleFollow();
+      if (followLive) {
+        applyFollow();
+      } else {
+        // Refresh data only; keep the user's historical window.
+        uplot.redraw(false);
+      }
     }
     renderLegend(list);
   }
 
-  var followRaf = 0;
-  function scheduleFollow() {
-    if (followRaf) return;
-    followRaf = requestAnimationFrame(function () {
-      followRaf = 0;
-      applyFollow();
-    });
-  }
-
   function forceXRange(min, max) {
     if (!uplot) return;
+    // uPlot 1.6 setScale is microtask-committed; default redraw() would
+    // immediately _setScale() from the OLD scaleX.min/max and clobber us.
+    // batch() commits setScale synchronously while applyingFollow is still true.
     applyingFollow = true;
     try {
-      uplot.setScale('x', { min: min, max: max });
-      if (uplot.redraw) uplot.redraw();
+      uplot.batch(function () {
+        uplot.setScale('x', { min: min, max: max });
+      });
     } finally {
       applyingFollow = false;
     }
-    // Prefer the scale uPlot actually applied.
     var sMin = uplot.scales.x.min != null ? uplot.scales.x.min : min;
     var sMax = uplot.scales.x.max != null ? uplot.scales.x.max : max;
     updateSpanReadout(sMin, sMax);
+  }
+
+  function forceYAuto() {
+    if (!uplot) return;
+    applyingFollow = true;
+    try {
+      uplot.batch(function () {
+        uplot.setScale('y', { min: null, max: null });
+      });
+    } finally {
+      applyingFollow = false;
+    }
   }
 
   function syncSeriesVisibility(list) {
@@ -358,15 +368,7 @@
       xmax = latest + pad;
     }
     forceXRange(xmin, xmax);
-    if (!userYZoom) {
-      applyingFollow = true;
-      try {
-        uplot.setScale('y', { min: null, max: null });
-        if (uplot.redraw) uplot.redraw();
-      } finally {
-        applyingFollow = false;
-      }
-    }
+    if (!userYZoom) forceYAuto();
   }
 
   function updateSpanReadout(xmin, xmax) {
@@ -414,13 +416,7 @@
       var pad = (range.max - range.min) * 0.02;
       forceXRange(range.min - pad, range.max + pad);
     }
-    applyingFollow = true;
-    try {
-      uplot.setScale('y', { min: null, max: null });
-      if (uplot.redraw) uplot.redraw();
-    } finally {
-      applyingFollow = false;
-    }
+    forceYAuto();
     userYZoom = false;
     setFollow(true);
     applyFollow();
@@ -444,9 +440,11 @@
       var y0 = uplot.scales.y.min;
       var y1 = uplot.scales.y.max;
       if (y0 == null || y1 == null) return;
-      uplot.setScale('y', {
-        min: yv + (y0 - yv) * factor,
-        max: yv + (y1 - yv) * factor,
+      uplot.batch(function () {
+        uplot.setScale('y', {
+          min: yv + (y0 - yv) * factor,
+          max: yv + (y1 - yv) * factor,
+        });
       });
     } else {
       var xv = uplot.posToVal(px, 'x');
@@ -465,12 +463,17 @@
       userXZoom = true;
       applyingFollow = true;
       try {
-        uplot.setScale('x', { min: nmin, max: nmax });
-        if (!userYZoom) uplot.setScale('y', { min: null, max: null });
+        uplot.batch(function () {
+          uplot.setScale('x', { min: nmin, max: nmax });
+          if (!userYZoom) uplot.setScale('y', { min: null, max: null });
+        });
       } finally {
         applyingFollow = false;
       }
-      updateSpanReadout(nmin, nmax);
+      updateSpanReadout(
+        uplot.scales.x.min != null ? uplot.scales.x.min : nmin,
+        uplot.scales.x.max != null ? uplot.scales.x.max : nmax
+      );
       // If follow is on, keep this span but stay glued to the live edge.
       if (followLive) applyFollow();
     }

@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.2.14
+
+- 修复 X 轴不推进 / 无法缩放：`setScale` 后不再调用默认 `redraw()`（会用旧 scale 覆盖 pending）
+- 改用 `uplot.batch()` 同步 commit，`applyingFollow` 在 hook 触发时仍为 true
+- follow 关时 `setData` 后 `redraw(false)` 只刷数据
+- `new uPlot()` 后重置 userX/userYZoom 标记
+- S7.1：Plot follow 回归测试 + 软件 Integration Gate（合成源全链路，105 tests）
+
 ## 0.2.13
 
 - Y 自动量程改用稳健分位数，避免单点尖峰把整段波形压成一条线
