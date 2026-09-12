@@ -9,163 +9,190 @@
     "serialLab.channels": {
         "justfloat.ch0": {
             "id": "justfloat.ch0",
-            "name": "ch0",
+            "path": "justfloat.ch0",
+            "displayName": "ch0",
             "color": "#3b82f6",
             "visible": true
         },
         "justfloat.ch1": {
             "id": "justfloat.ch1",
-            "name": "ch1",
+            "path": "justfloat.ch1",
+            "displayName": "ch1",
             "color": "#ef4444",
             "visible": false
         },
         "justfloat.ch2": {
             "id": "justfloat.ch2",
-            "name": "ch2",
+            "path": "justfloat.ch2",
+            "displayName": "ch2",
             "color": "#10b981",
             "visible": false
         },
         "justfloat.ch3": {
             "id": "justfloat.ch3",
-            "name": "ch3",
+            "path": "justfloat.ch3",
+            "displayName": "ch3",
             "color": "#f59e0b",
             "visible": false
         },
         "justfloat.ch4": {
             "id": "justfloat.ch4",
-            "name": "ch4",
+            "path": "justfloat.ch4",
+            "displayName": "ch4",
             "color": "#8b5cf6",
             "visible": false
         },
         "justfloat.ch5": {
             "id": "justfloat.ch5",
-            "name": "ch5",
+            "path": "justfloat.ch5",
+            "displayName": "ch5",
             "color": "#06b6d4",
             "visible": false
         },
         "justfloat.ch6": {
             "id": "justfloat.ch6",
-            "name": "ch6",
+            "path": "justfloat.ch6",
+            "displayName": "ch6",
             "color": "#f97316",
             "visible": false
         },
         "justfloat.ch7": {
             "id": "justfloat.ch7",
-            "name": "ch7",
+            "path": "justfloat.ch7",
+            "displayName": "ch7",
             "color": "#84cc16",
             "visible": false
         },
         "justfloat.ch8": {
             "id": "justfloat.ch8",
-            "name": "ch8",
+            "path": "justfloat.ch8",
+            "displayName": "ch8",
             "color": "#3b82f6",
             "visible": false
         },
         "justfloat.ch9": {
             "id": "justfloat.ch9",
-            "name": "ch9",
+            "path": "justfloat.ch9",
+            "displayName": "ch9",
             "color": "#ef4444",
             "visible": false
         },
         "justfloat.ch10": {
             "id": "justfloat.ch10",
-            "name": "ch10",
+            "path": "justfloat.ch10",
+            "displayName": "ch10",
             "color": "#10b981",
             "visible": false
         },
         "justfloat.ch11": {
             "id": "justfloat.ch11",
-            "name": "ch11",
+            "path": "justfloat.ch11",
+            "displayName": "ch11",
             "color": "#f59e0b",
             "visible": false
         },
         "justfloat.ch12": {
             "id": "justfloat.ch12",
-            "name": "ch12",
+            "path": "justfloat.ch12",
+            "displayName": "ch12",
             "color": "#8b5cf6",
             "visible": true
         },
         "justfloat.ch13": {
             "id": "justfloat.ch13",
-            "name": "ch13",
+            "path": "justfloat.ch13",
+            "displayName": "ch13",
             "color": "#06b6d4",
             "visible": false
         },
         "justfloat.ch14": {
             "id": "justfloat.ch14",
-            "name": "ch14",
+            "path": "justfloat.ch14",
+            "displayName": "ch14",
             "color": "#f97316",
             "visible": true
         },
         "justfloat.ch15": {
             "id": "justfloat.ch15",
-            "name": "ch15",
+            "path": "justfloat.ch15",
+            "displayName": "ch15",
             "color": "#84cc16",
             "visible": false
         },
         "justfloat.ch16": {
             "id": "justfloat.ch16",
-            "name": "ch16",
+            "path": "justfloat.ch16",
+            "displayName": "ch16",
             "color": "#3b82f6",
             "visible": false
         },
         "justfloat.ch17": {
             "id": "justfloat.ch17",
-            "name": "ch17",
+            "path": "justfloat.ch17",
+            "displayName": "ch17",
             "color": "#ef4444",
             "visible": true
         },
         "justfloat.ch18": {
             "id": "justfloat.ch18",
-            "name": "ch18",
+            "path": "justfloat.ch18",
+            "displayName": "ch18",
             "color": "#10b981",
             "visible": false
         },
         "justfloat.ch19": {
             "id": "justfloat.ch19",
-            "name": "ch19",
+            "path": "justfloat.ch19",
+            "displayName": "ch19",
             "color": "#f59e0b",
             "visible": false
         },
         "justfloat.ch20": {
             "id": "justfloat.ch20",
-            "name": "ch20",
+            "path": "justfloat.ch20",
+            "displayName": "ch20",
             "color": "#8b5cf6",
             "visible": false
         },
         "justfloat.ch21": {
             "id": "justfloat.ch21",
-            "name": "ch21",
+            "path": "justfloat.ch21",
+            "displayName": "ch21",
             "color": "#06b6d4",
             "visible": false
         },
         "justfloat.ch22": {
             "id": "justfloat.ch22",
-            "name": "ch22",
+            "path": "justfloat.ch22",
+            "displayName": "ch22",
             "color": "#f97316",
             "visible": false
         },
         "justfloat.ch23": {
             "id": "justfloat.ch23",
-            "name": "ch23",
+            "path": "justfloat.ch23",
+            "displayName": "ch23",
             "color": "#84cc16",
             "visible": false
         },
         "justfloat.ch24": {
             "id": "justfloat.ch24",
-            "name": "ch24",
+            "path": "justfloat.ch24",
+            "displayName": "ch24",
             "color": "#3b82f6",
             "visible": false
         },
         "justfloat.ch25": {
             "id": "justfloat.ch25",
-            "name": "ch25",
+            "path": "justfloat.ch25",
+            "displayName": "ch25",
             "color": "#ef4444",
             "visible": false
         },
         "justfloat.ch26": {
             "id": "justfloat.ch26",
-            "name": "ch26",
+            "path": "justfloat.ch26",
+            "displayName": "ch26",
             "color": "#10b981",
             "visible": false
         }

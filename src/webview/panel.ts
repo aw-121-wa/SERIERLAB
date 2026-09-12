@@ -65,6 +65,17 @@ function getHtml(webview: vscode.Webview, ext: vscode.Uri): string {
     <aside class="params-col" id="params-col">
       <div class="params-header">
         <div class="params-title">Parameters</div>
+        <label>参数来源 <select id="params-source"><option value="native">Native 串口</option><option value="swd">SWD / DAPLink</option></select></label>
+        <div id="swd-controls" hidden>
+          <button data-swd="elf">选择 ELF</button>
+          <button data-swd="watch">选择参数</button>
+          <button data-swd="settings">SWD 设置</button>
+          <button data-swd="help">使用说明</button>
+          <button data-swd="connect">连接 SWD</button>
+          <button data-swd="disconnect">断开 SWD</button>
+          <button data-swd="refresh">刷新</button>
+          <div class="hint">运行态 RAM 调参 · 复位后恢复默认值</div>
+        </div>
         <div id="params-state" class="params-state">—</div>
         <div id="params-device" class="params-device"></div>
         <input id="params-search" class="params-search" placeholder="搜索 path / unit…" />

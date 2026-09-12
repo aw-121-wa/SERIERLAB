@@ -642,6 +642,8 @@
 
   // --- Parameter Inspector (presentation only; Host ParameterStore is truth) ---
   var paramById = new Map();
+  var paramSource = 'native';
+  var paramEpoch = -1;
   var paramSessionState = 'disconnected';
   var paramDeviceName = '';
   var paramFw = '';
@@ -731,7 +733,9 @@
     if (!listEl) return;
 
     var stateText = {
-      disconnected: '未连接 Native 设备',
+      disconnected: paramSource === 'swd' ? '未连接 SWD' : '未连接 Native 设备',
+      connecting: '正在连接 SWD…',
+      error: 'SWD 连接失败',
       handshaking: '正在握手…',
       discovering: '正在发现参数…',
       ready: '已就绪',
@@ -747,7 +751,7 @@
         paramById.size +
         ' Parameters';
     } else {
-      devEl.textContent = '';
+      devEl.textContent = paramSource === 'swd' ? paramDeviceName : '';
     }
 
     if (paramSessionState !== 'ready') {
@@ -774,6 +778,11 @@
     function renderNode(node, depth) {
       if (node.parameter) {
         var p = node.parameter;
+        var rowSource = paramSource;
+        var rowEpoch = paramEpoch;
+        function sendParam(type, value) {
+          vscode.postMessage({ type: type, parameterId: p.id, value: value, source: rowSource, epoch: rowEpoch });
+        }
         var row = document.createElement('div');
         row.className = 'param-row';
         row.dataset.id = String(p.id);
@@ -794,7 +803,7 @@
           cb.disabled = !p.writable || !!p.pending;
           cb.addEventListener('change', function () {
             if (!p.writable || p.pending) return;
-            vscode.postMessage({ type: 'parameter.set', parameterId: p.id, value: cb.checked });
+            sendParam('parameter.set', cb.checked);
           });
           row.appendChild(cb);
         } else {
@@ -829,7 +838,7 @@
               return;
             }
             paramEditing.delete(p.id);
-            vscode.postMessage({ type: 'parameter.set', parameterId: p.id, value: v.value });
+            sendParam('parameter.set', v.value);
           }
           input.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
@@ -850,7 +859,7 @@
           ref.textContent = '↻';
           ref.disabled = !!p.pending;
           ref.addEventListener('click', function () {
-            vscode.postMessage({ type: 'parameter.refresh', parameterId: p.id });
+            sendParam('parameter.refresh');
           });
           row.appendChild(ref);
         }
@@ -893,6 +902,9 @@
   }
 
   function applyParametersSnapshot(msg) {
+    if ((msg.source || 'native') !== paramSource) return;
+    if (typeof msg.epoch === 'number' && msg.epoch < paramEpoch) return;
+    paramEpoch = msg.epoch;
     paramSessionState = msg.sessionState || 'disconnected';
     paramDeviceName = msg.deviceName || '';
     paramFw = msg.firmwareVersion || '';
@@ -943,6 +955,7 @@
   }
 
   function applyParametersUpdate(msg) {
+    if ((msg.source || 'native') !== paramSource || msg.epoch !== paramEpoch) return;
     var p = msg.parameter;
     if (!p || typeof p.id !== 'number') return;
     paramById.set(p.id, p);
@@ -953,6 +966,19 @@
   document.getElementById('params-search').addEventListener('input', function (e) {
     paramQuery = e.target.value || '';
     renderParams();
+  });
+
+  document.getElementById('params-source').addEventListener('change', function (e) {
+    paramSource = e.target.value;
+    paramSessionState = 'disconnected'; paramById.clear(); paramEditing.clear();
+    document.getElementById('swd-controls').hidden = paramSource !== 'swd';
+    renderParams();
+    vscode.postMessage({ type: 'parameters.source', source: paramSource });
+  });
+  document.querySelectorAll('[data-swd]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      vscode.postMessage({ type: 'swd.action', action: button.dataset.swd });
+    });
   });
 
   window.addEventListener('message', function (event) {

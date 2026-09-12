@@ -25,6 +25,7 @@ import {
   toParameterView,
 } from './protocol/native/parameterView';
 import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
+import { SwdController } from './swd/controller';
 
 export class AppController implements vscode.Disposable {
   readonly serial = new SerialService();
@@ -40,11 +41,20 @@ export class AppController implements vscode.Disposable {
   private readonly pendingUi: PendingUiQueue;
   readonly plot = new PlotPresenter();
   private native: NativeSession | undefined;
+  private readonly swd: SwdController;
+  private parameterSource: 'native' | 'swd' = 'native';
+  private parameterEpoch = 0;
   private paused = false;
   private rxEncoding: 'text' | 'hex' = 'text';
   private timer: NodeJS.Timeout | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
+    this.swd = new SwdController(context, (p) => {
+      if (this.parameterSource === 'swd') {
+        if (p) this.post({ type: 'parameters.update', source: 'swd', epoch: this.parameterEpoch, parameter: p });
+        else { ++this.parameterEpoch; this.pushNativeParameters(); }
+      }
+    });
     this.raw = new RawBuffer(vscode.workspace.getConfiguration('serialLab').get<number>('rawBufferBytes') ?? 2 * 1024 * 1024);
     this.series = new SeriesStore(
       (vscode.workspace.getConfiguration('serialLab').get<number>('historySeconds') ?? 60) * 1000
@@ -57,7 +67,14 @@ export class AppController implements vscode.Disposable {
     this.channels.applySavedPrefs(state.loadChannelPrefs());
     this.applyProtocolFromState();
     this.serial.on('data', (bytes: Uint8Array) => this.onRx(bytes));
-    this.serial.on('state', () => this.pushStatus());
+    this.serial.on('state', () => {
+      if (this.serial.getState() !== 'connected') {
+        this.native?.disconnect(); this.native = undefined;
+        if (this.parameterSource === 'native') ++this.parameterEpoch;
+        this.pushNativeParameters();
+      }
+      this.pushStatus();
+    });
     this.timer = setInterval(() => this.flushUi(), 50);
     this.projectConfig.onChange((snap) => this.applyProjectConfig(snap));
     void this.projectConfig.start().then(() => this.applyProjectConfig(this.projectConfig.snapshot()));
@@ -117,6 +134,7 @@ export class AppController implements vscode.Disposable {
     } else {
       this.customConfig = undefined;
       if (p === 'firewater') this.router.setProtocol({ kind: 'firewater' });
+      else if (p === 'native') this.router.setProtocol({ kind: 'native' });
       else if (p === 'raw') this.router.setProtocol({ kind: 'raw' });
       else this.router.setProtocol({ kind: 'justfloat' });
     }
@@ -128,7 +146,11 @@ export class AppController implements vscode.Disposable {
   }
 
   reloadProtocol(): void {
+    this.native?.disconnect(); this.native = undefined;
+    ++this.parameterEpoch;
     this.applyProtocolFromState();
+    if (this.serial.getState() === 'connected') this.startNativeSession();
+    this.pushNativeParameters();
     this.plot.bumpGeneration('protocol');
     this.pushStatus();
   }
@@ -189,16 +211,29 @@ export class AppController implements vscode.Disposable {
 
   handleWebviewMessage(msg: WebviewToHost): void {
     switch (msg.type) {
+      case 'parameters.source':
+        if (msg.source !== 'native' && msg.source !== 'swd') return;
+        this.parameterSource = msg.source; ++this.parameterEpoch;
+        this.pushNativeParameters();
+        break;
+      case 'swd.action':
+        void this.handleSwdAction(msg.action);
+        break;
       case 'ready':
+        this.parameterSource = 'native'; ++this.parameterEpoch;
         this.plot.requestSnapshot('ready');
         this.pushStatus();
         this.flushUi();
         this.pushNativeParameters({ kind: 'state' });
         break;
       case 'parameter.set':
+        if (msg.source !== this.parameterSource || msg.epoch !== this.parameterEpoch) return;
+        if (msg.source === 'swd') { void this.swd.set(msg.parameterId, msg.value); break; }
         void this.handleParameterSet(msg);
         break;
       case 'parameter.refresh': {
+        if (msg.source !== this.parameterSource || msg.epoch !== this.parameterEpoch) return;
+        if (msg.source === 'swd') { void this.swd.refresh(); break; }
         void this.getNativeParameterValue(msg.parameterId).catch(() => {});
         break;
       }
@@ -284,21 +319,38 @@ export class AppController implements vscode.Disposable {
       log.info(
         `Connected ${open.path} @ ${open.baudRate} ${open.dataBits}${String(open.parity)[0]}${open.stopBits} rtscts=${open.rtscts} xon=${open.xon}`
       );
-      if (this.router.protocolKind === 'native') {
-        this.native = new NativeSession((b) => {
-          void this.serial.write(b).catch((e) => log.error(`native tx: ${(e as Error).message}`));
-        });
-        this.native.onChange((e) => this.pushNativeParameters(e));
-        void this.native.startHandshake().then(() => {
-          this.pushNativeParameters({ kind: 'state' });
-        }).catch((e) => {
-          log.warn(`native handshake: ${(e as Error).message}`);
-          this.pushNativeParameters({ kind: 'state' });
-        });
-      }
+      this.startNativeSession();
     } catch (e) {
       void vscode.window.showErrorMessage(`Serial Lab connect failed: ${(e as Error).message}`);
     }
+  }
+
+  private startNativeSession(): void {
+    if (this.router.protocolKind !== 'native') return;
+    this.native?.disconnect();
+    if (this.parameterSource === 'native') ++this.parameterEpoch;
+    this.native = new NativeSession((b) => {
+      void this.serial.write(b).catch((e) => log.error(`native tx: ${(e as Error).message}`));
+    });
+    this.native.onChange((e) => { if (this.parameterSource === 'native') this.pushNativeParameters(e); });
+    void this.native.startHandshake().then(() => {
+      if (this.parameterSource === 'native') this.pushNativeParameters({ kind: 'state' });
+    }).catch((e) => {
+      log.warn(`native handshake: ${(e as Error).message}`);
+      if (this.parameterSource === 'native') this.pushNativeParameters({ kind: 'state' });
+    });
+  }
+
+  private async handleSwdAction(action: string): Promise<void> {
+    try {
+      if (action === 'connect') await this.swd.connect();
+      else if (action === 'disconnect') await this.swd.disconnect();
+      else if (action === 'elf') await this.swd.chooseElf();
+      else if (action === 'watch') await this.swd.chooseWatches();
+      else if (action === 'refresh') await this.swd.refresh();
+      else if (action === 'settings') await vscode.commands.executeCommand('workbench.action.openSettings', 'serialLab.swd');
+      else if (action === 'help') await vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.joinPath(this.context.extensionUri, 'SWD.md'));
+    } catch (e) { void vscode.window.showErrorMessage(`Serial Lab SWD: ${(e as Error).message}`); }
   }
 
   private mapNativeState(): NativeUiSessionState {
@@ -318,6 +370,13 @@ export class AppController implements vscode.Disposable {
   }
 
   private pushNativeParameters(e?: { kind: string; parameterId?: number }): void {
+    if (this.parameterSource === 'swd') {
+      // Native callbacks must not replace or refresh the SWD presentation.
+      if (e?.parameterId !== undefined) return;
+      this.post({ type: 'parameters.snapshot', source: 'swd', epoch: this.parameterEpoch,
+        sessionState: this.swd.state, deviceName: this.swd.detail, parameters: this.swd.parameters });
+      return;
+    }
     if (this.router.protocolKind !== 'native') {
       // still push empty snapshot so UI can show “需要 Native”
       this.post({
@@ -402,6 +461,9 @@ export class AppController implements vscode.Disposable {
   }
 
   private post(msg: HostToWebview): void {
+    if (msg.type === 'parameters.snapshot' || msg.type === 'parameters.update') {
+      msg.source ??= 'native'; msg.epoch ??= this.parameterEpoch;
+    }
     getPanel()?.webview.postMessage(msg);
   }
 
@@ -443,6 +505,8 @@ export class AppController implements vscode.Disposable {
 
   dispose(): void {
     if (this.timer) clearInterval(this.timer);
+    this.native?.disconnect();
+    this.swd.dispose();
     void this.serial.disconnect();
   }
 }

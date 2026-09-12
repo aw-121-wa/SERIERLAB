@@ -33,6 +33,8 @@ export type HostToWebview =
     }
   | {
       type: 'parameters.snapshot';
+      source?: 'native' | 'swd';
+      epoch?: number;
       sessionState: string;
       deviceName?: string;
       firmwareVersion?: string;
@@ -52,6 +54,8 @@ export type HostToWebview =
     }
   | {
       type: 'parameters.update';
+      source?: 'native' | 'swd';
+      epoch?: number;
       parameter: {
         id: number;
         path: string;
@@ -70,6 +74,8 @@ export type HostToWebview =
 
 export type WebviewToHost =
   | { type: 'ready' }
+  | { type: 'parameters.source'; source: 'native' | 'swd' }
+  | { type: 'swd.action'; action: 'connect' | 'disconnect' | 'elf' | 'watch' | 'refresh' | 'settings' | 'help' }
   | { type: 'plot.needSnapshot'; reason?: string }
   | { type: 'pause'; paused: boolean }
   | { type: 'toggleChannel'; id: string; visible: boolean }
@@ -77,5 +83,5 @@ export type WebviewToHost =
   | { type: 'setRxEncoding'; encoding: 'text' | 'hex' }
   | { type: 'clearTerminal' }
   | { type: 'clearWaveform' }
-  | { type: 'parameter.set'; parameterId: number; value: number | boolean }
-  | { type: 'parameter.refresh'; parameterId: number };
+  | { type: 'parameter.set'; parameterId: number; value: number | boolean; source: 'native' | 'swd'; epoch: number }
+  | { type: 'parameter.refresh'; parameterId: number; source: 'native' | 'swd'; epoch: number };

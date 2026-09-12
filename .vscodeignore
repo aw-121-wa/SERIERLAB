@@ -2,6 +2,12 @@
 .worktrees/**
 .superpowers/**
 .tmp_doc_review/**
+.tmp_swd_deps/**
+.tmp_firmware_yaw/**
+.tmp_firmware_yaw_base/**
+scripts/__pycache__/**
+scripts/test_*.py
+scripts/fixtures/**
 .claude/**
 docs/**
 src/**

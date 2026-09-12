@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.2.22
+
+- 保留 Native 调参，新增独立的 SWD / DAPLink 参数来源：pyOCD 运行态附加、ELF/DWARF 变量选择、低频轮询、RAM 校验及写后读回。
+- 连接时核对 ELF 的 Flash 加载段，不自动解锁、不暂停、复位或烧录。
+- 修复 Native 选择回落到 JustFloat；隔离不同来源和会话的参数写入。
+- 新增 SWD.md 使用说明与 STM32 端要求。
+
 ## 0.2.21
 
 - 侧栏协议下拉增加 **Native (在线调参)**；settings enum 同步
