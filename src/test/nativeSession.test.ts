@@ -157,13 +157,28 @@ describe('NativeSession integration', () => {
     expect(session.getParameters()).toHaveLength(0);
   });
 
-  it('readonly / out-of-range rejected on host', async () => {
+  it('readonly / out-of-range rejected on host (not UnknownParameter)', async () => {
     const { session, device } = pair();
     device.params.set(1, { path: 'ro', type: NativeParamType.Int32, writable: false, value: 1 });
     device.params.set(2, { path: 'kp', type: NativeParamType.Float32, writable: true, value: 1 });
     await session.startHandshake();
+
+    // Explicitly require discovered id=2 with max=100 (FakeDevice PARAM_DESC).
+    const kp = session.getParameter(2);
+    expect(kp).toBeDefined();
+    expect(kp!.descriptor.path).toBe('kp');
+    expect(kp!.descriptor.max).toBeCloseTo(100, 5);
+    expect(session.getParameter(1)?.descriptor.writable).toBe(false);
+
+    const framesBefore = session.metrics.framesTx;
     await expect(session.setParameter(1, 2)).rejects.toThrow(/read-only/);
+    // Host-local reject: must be range, never "unknown"
     await expect(session.setParameter(2, 101)).rejects.toThrow(/max/);
+    await expect(session.setParameter(2, 101)).rejects.not.toThrow(/unknown/i);
+    // No PARAM_SET was sent for the rejected OOR write
+    expect(session.metrics.framesTx).toBe(framesBefore);
+    // Confirmed value on the device store still the initial GET-able value
+    expect(await session.getParameterAsync(2)).toBe(1);
   });
 
   it('NACK keeps old confirmed value', async () => {
