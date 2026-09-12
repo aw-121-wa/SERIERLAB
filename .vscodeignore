@@ -5,6 +5,7 @@
 .tmp_swd_deps/**
 .tmp_firmware_yaw/**
 .tmp_firmware_yaw_base/**
+.venv-swd/**
 scripts/__pycache__/**
 scripts/test_*.py
 scripts/fixtures/**

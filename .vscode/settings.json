@@ -196,5 +196,28 @@
             "color": "#10b981",
             "visible": false
         }
-    }
+    },
+    "serialLab.swd.pythonPath": "D:/myvofa/.venv-swd/Scripts/python.exe",
+    "serialLab.swd.target": "stm32f750v8tx",
+    "serialLab.swd.elf": "d:\\stm32project\\2026ROBOCUP\\build\\Release-SWD\\chassis_motor.elf",
+    "serialLab.swd.watch": [
+        {
+            "path": "imu_yaw_test.offset_deg"
+        },
+        {
+            "path": "state.armed"
+        },
+        {
+            "path": "chassis_debug.sequence"
+        },
+        {
+            "path": "chassis_debug.command"
+        },
+        {
+            "path": "chassis_debug.acknowledged"
+        },
+        {
+            "path": "chassis_debug.result"
+        }
+    ]
 }
