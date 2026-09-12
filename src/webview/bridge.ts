@@ -31,6 +31,41 @@ export type HostToWebview =
       droppedUiBytes?: number;
       tMs?: number;
     }
+  | {
+      type: 'parameters.snapshot';
+      sessionState: string;
+      deviceName?: string;
+      firmwareVersion?: string;
+      parameters: {
+        id: number;
+        path: string;
+        type: 'float32' | 'int32' | 'uint32' | 'bool';
+        writable: boolean;
+        unit?: string;
+        min?: number;
+        max?: number;
+        step?: number;
+        confirmedValue?: number | boolean;
+        pending?: { requestedValue: number | boolean };
+        lastError?: { detail: string };
+      }[];
+    }
+  | {
+      type: 'parameters.update';
+      parameter: {
+        id: number;
+        path: string;
+        type: 'float32' | 'int32' | 'uint32' | 'bool';
+        writable: boolean;
+        unit?: string;
+        min?: number;
+        max?: number;
+        step?: number;
+        confirmedValue?: number | boolean;
+        pending?: { requestedValue: number | boolean };
+        lastError?: { detail: string };
+      };
+    }
   | { type: 'cleared' };
 
 export type WebviewToHost =
@@ -41,4 +76,6 @@ export type WebviewToHost =
   | { type: 'send'; encoding: 'text' | 'hex'; payload: string; lineEnding: 'none' | 'lf' | 'cr' | 'crlf' }
   | { type: 'setRxEncoding'; encoding: 'text' | 'hex' }
   | { type: 'clearTerminal' }
-  | { type: 'clearWaveform' };
+  | { type: 'clearWaveform' }
+  | { type: 'parameter.set'; parameterId: number; value: number | boolean }
+  | { type: 'parameter.refresh'; parameterId: number };

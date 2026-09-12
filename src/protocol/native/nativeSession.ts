@@ -40,6 +40,12 @@ export type NativeSessionState =
   | 'discovery_failed'
   | 'disconnected';
 
+export type NativeParamEvent = {
+  kind: 'state' | 'descriptor' | 'value' | 'pending' | 'ack' | 'nack';
+  parameterId?: number;
+  state: NativeSessionState;
+};
+
 /**
  * Host-side native control session.
  * Transport is injected (serial write); no vscode/webview dependency.
@@ -55,6 +61,7 @@ export class NativeSession {
   private deviceName = '';
   private firmwareVersion = '';
   private deviceCapabilities = 0;
+  private changeListeners: ((e: NativeParamEvent) => void)[] = [];
   metrics: NativeSessionMetrics = {
     framesRx: 0,
     framesTx: 0,
@@ -65,6 +72,25 @@ export class NativeSession {
   };
 
   constructor(private readonly send: (bytes: Uint8Array) => void) {}
+
+  onChange(cb: (e: NativeParamEvent) => void): void {
+    this.changeListeners.push(cb);
+  }
+
+  private emit(kind: NativeParamEvent['kind'], parameterId?: number): void {
+    const e: NativeParamEvent = { kind, parameterId, state: this.state };
+    for (const cb of this.changeListeners) {
+      try {
+        cb(e);
+      } catch {
+        /* ignore listener errors */
+      }
+    }
+  }
+
+  listRuntime() {
+    return this.store.list();
+  }
 
   getState(): NativeSessionState {
     return this.state;
@@ -227,6 +253,7 @@ export class NativeSession {
         return;
       }
       this.store.applyValue(v.id, v.value);
+      this.emit('value', v.id);
       return;
     }
   }
@@ -239,12 +266,14 @@ export class NativeSession {
         return;
       }
       this.store.applyValue(v.id, v.value);
+      this.emit('value', v.id);
       return;
     }
     if (frame.messageType === NativeMessageType.ParamAck) {
       const v = decodeParamValueMsg(frame.payload);
       if (v) {
         this.store.applyAck(v.id, v.value, frame.requestId);
+        this.emit('ack', v.id);
       }
       return;
     }
@@ -253,6 +282,7 @@ export class NativeSession {
       if (n) {
         this.metrics.nackCount += 1;
         this.store.applyNack(n.id, n.code, n.detail, frame.requestId);
+        this.emit('nack', n.id);
       }
     }
   }
@@ -272,6 +302,9 @@ export class NativeSession {
       this.clearDiscoveryTimer();
       this.discoveryError = null;
       this.state = 'ready';
+      this.emit('state');
+    } else {
+      this.emit('descriptor', r.descriptor.id);
     }
   }
 
@@ -295,22 +328,41 @@ export class NativeSession {
     if (!valid.ok) throw new Error(valid.error);
     const requestId = this.requests.allocateId();
     this.store.markPending(id, requestId, value, Date.now());
+    this.emit('pending', id);
     const p = this.requests.register(requestId);
     this.tx(NativeMessageType.ParamSet, 0, requestId, encodeParamValueMsg(id, d.type, value));
-    const frame = await p;
+    let frame: NativeFrame;
+    try {
+      frame = await p;
+    } catch (e) {
+      this.store.clearPendingByRequest(requestId);
+      const st2 = this.store.getById(id);
+      if (st2) {
+        st2.pending = undefined;
+        if (/timeout/i.test((e as Error).message)) {
+          st2.lastError = { code: 0, detail: 'timeout' };
+        }
+      }
+      this.emit('nack', id);
+      throw e;
+    }
     this.syncTimeoutMetric();
     if (frame.messageType === NativeMessageType.ParamAck) {
       const v = decodeParamValueMsg(frame.payload);
       if (!v) throw new Error('malformed ACK');
       this.store.applyAck(id, v.value, requestId);
+      this.emit('ack', id);
       return v.value;
     }
     if (frame.messageType === NativeMessageType.ParamNack) {
       const n = decodeParamNack(frame.payload);
       this.metrics.nackCount += 1;
       this.store.applyNack(id, n?.code ?? 0, n?.detail, requestId);
+      this.emit('nack', id);
       throw new Error(n?.detail || `NACK ${n?.code}`);
     }
+    this.store.clearPendingByRequest(requestId);
+    this.emit('nack', id);
     throw new Error(`unexpected response type ${frame.messageType}`);
   }
 }

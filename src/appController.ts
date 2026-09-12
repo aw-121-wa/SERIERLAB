@@ -18,6 +18,12 @@ import { CustomProtocolConfig } from './protocol/custom';
 import { toSerialPortOpenOptions } from './serial/framing';
 import { NativeSession } from './protocol/native/nativeSession';
 import { NativeParamValue, ParameterDescriptor } from './protocol/native/types';
+import {
+  NativeUiSessionState,
+  ParameterView,
+  parseWebviewSetValue,
+  toParameterView,
+} from './protocol/native/parameterView';
 import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
 
 export class AppController implements vscode.Disposable {
@@ -187,7 +193,15 @@ export class AppController implements vscode.Disposable {
         this.plot.requestSnapshot('ready');
         this.pushStatus();
         this.flushUi();
+        this.pushNativeParameters({ kind: 'state' });
         break;
+      case 'parameter.set':
+        void this.handleParameterSet(msg);
+        break;
+      case 'parameter.refresh': {
+        void this.getNativeParameterValue(msg.parameterId).catch(() => {});
+        break;
+      }
       case 'plot.needSnapshot':
         this.plot.requestSnapshot(msg.reason ?? 'needSnapshot');
         this.flushUi();
@@ -274,8 +288,12 @@ export class AppController implements vscode.Disposable {
         this.native = new NativeSession((b) => {
           void this.serial.write(b).catch((e) => log.error(`native tx: ${(e as Error).message}`));
         });
-        void this.native.startHandshake().catch((e) => {
+        this.native.onChange((e) => this.pushNativeParameters(e));
+        void this.native.startHandshake().then(() => {
+          this.pushNativeParameters({ kind: 'state' });
+        }).catch((e) => {
           log.warn(`native handshake: ${(e as Error).message}`);
+          this.pushNativeParameters({ kind: 'state' });
         });
       }
     } catch (e) {
@@ -283,19 +301,51 @@ export class AppController implements vscode.Disposable {
     }
   }
 
-  async disconnect(): Promise<void> {
-    this.native?.disconnect();
-    this.native = undefined;
-    await this.serial.disconnect();
+  private mapNativeState(): NativeUiSessionState {
+    const s = this.native?.getState();
+    switch (s) {
+      case 'handshaking':
+      case 'discovering':
+      case 'ready':
+      case 'incompatible':
+      case 'discovery_failed':
+        return s;
+      default:
+        return this.router.protocolKind === 'native' && this.serial.getState() === 'connected'
+          ? 'handshaking'
+          : 'disconnected';
+    }
   }
 
-  /** S12 API: list discovered native parameters. */
-  listNativeParameters(): ParameterDescriptor[] {
-    return this.native?.getParameters() ?? [];
-  }
-
-  getNativeParameter(idOrPath: number | string) {
-    return this.native?.getParameter(idOrPath);
+  private pushNativeParameters(e?: { kind: string; parameterId?: number }): void {
+    if (this.router.protocolKind !== 'native') {
+      // still push empty snapshot so UI can show “需要 Native”
+      this.post({
+        type: 'parameters.snapshot',
+        sessionState: 'disconnected',
+        parameters: [],
+      });
+      return;
+    }
+    if (!this.native) {
+      this.post({ type: 'parameters.snapshot', sessionState: 'disconnected', parameters: [] });
+      return;
+    }
+    if (e?.parameterId !== undefined && (e.kind === 'pending' || e.kind === 'ack' || e.kind === 'nack' || e.kind === 'value')) {
+      const st = this.native.getParameter(e.parameterId);
+      if (st) {
+        this.post({ type: 'parameters.update', parameter: toParameterView(st) });
+        return;
+      }
+    }
+    const views: ParameterView[] = this.native.listRuntime().map(toParameterView);
+    this.post({
+      type: 'parameters.snapshot',
+      sessionState: this.mapNativeState(),
+      deviceName: this.native.getDeviceName(),
+      firmwareVersion: this.native.getFirmwareVersion(),
+      parameters: views,
+    });
   }
 
   async setNativeParameter(id: number, value: NativeParamValue): Promise<NativeParamValue> {
@@ -306,6 +356,38 @@ export class AppController implements vscode.Disposable {
   async getNativeParameterValue(id: number): Promise<NativeParamValue | undefined> {
     if (!this.native) throw new Error('native session not active');
     return this.native.getParameterAsync(id);
+  }
+
+  /** S12: validate webview payload then SET; never trust raw webview types. */
+  private async handleParameterSet(msg: { parameterId: number; value: number | boolean }): Promise<void> {
+    const parsed = parseWebviewSetValue(msg.parameterId, msg.value);
+    if (!parsed.ok) {
+      log.warn(`parameter.set rejected: ${parsed.error}`);
+      return;
+    }
+    try {
+      await this.setNativeParameter(parsed.parameterId, parsed.value);
+    } catch (e) {
+      log.warn(`parameter.set failed: ${(e as Error).message}`);
+      // store already holds error/pending-cleared; ensure UI update
+      const st = this.native?.getParameter(parsed.parameterId);
+      if (st) this.post({ type: 'parameters.update', parameter: toParameterView(st) });
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    this.native?.disconnect();
+    this.native = undefined;
+    this.pushNativeParameters({ kind: 'state' });
+    await this.serial.disconnect();
+  }
+
+  listNativeParameters(): ParameterDescriptor[] {
+    return this.native?.getParameters() ?? [];
+  }
+
+  getNativeParameter(idOrPath: number | string) {
+    return this.native?.getParameter(idOrPath);
   }
 
   exportSamples(uri: vscode.Uri): void {

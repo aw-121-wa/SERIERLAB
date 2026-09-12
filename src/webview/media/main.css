@@ -146,3 +146,139 @@ body {
 .send-wrap input {
   flex: 1;
 }
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr minmax(200px, 280px);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--vscode-panel-border, #444);
+}
+
+.plot-col {
+  min-width: 0;
+}
+
+.params-col {
+  border-left: 1px solid var(--vscode-panel-border, #444);
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+}
+
+.params-header {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border, #333);
+  flex-shrink: 0;
+}
+
+.params-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.params-state {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.params-device {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.params-search {
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--vscode-input-border, #555);
+  border-radius: 3px;
+  background: var(--vscode-input-background, #2a2a2a);
+  color: var(--vscode-input-foreground, #ddd);
+  font-size: 12px;
+}
+
+.params-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 6px 10px;
+  font-size: 12px;
+}
+
+.param-group > summary {
+  cursor: pointer;
+  opacity: 0.85;
+  font-weight: 600;
+  padding: 2px 0;
+}
+
+.param-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(70px, 100px) auto;
+  gap: 4px;
+  align-items: center;
+  padding: 3px 2px 3px 10px;
+}
+
+.param-row .pname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.param-row input[type='text'],
+.param-row input[type='number'] {
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-input-border, #555);
+  border-radius: 3px;
+  background: var(--vscode-editor-background, #1e1e1e);
+  color: var(--vscode-foreground, #ddd);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+}
+
+.param-row input:disabled {
+  opacity: 0.55;
+}
+
+.param-row.pending input[type='text'],
+.param-row.pending input[type='number'] {
+  border-color: var(--vscode-focusBorder, #007acc);
+}
+
+.param-row .pflag {
+  font-size: 11px;
+  min-width: 1.2em;
+}
+
+.param-row.ok .pflag {
+  color: var(--vscode-charts-green, #89d185);
+}
+
+.param-row.err .pflag {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.param-row .punit {
+  opacity: 0.65;
+  font-size: 11px;
+}
+
+.param-row .perr {
+  grid-column: 1 / -1;
+  color: var(--vscode-errorForeground, #f14c4c);
+  font-size: 11px;
+  padding-left: 10px;
+}
+
+.param-empty {
+  opacity: 0.65;
+  padding: 8px;
+}

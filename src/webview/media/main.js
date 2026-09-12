@@ -623,6 +623,7 @@
     setFollow(!followLive);
   });
   setFollow(true);
+  renderParams();
   document.getElementById('rx-enc').addEventListener('change', function (e) {
     vscode.postMessage({ type: 'setRxEncoding', encoding: e.target.value });
   });
@@ -639,12 +640,287 @@
     if (e.key === 'Enter') document.getElementById('tx-send').click();
   });
 
+  // --- Parameter Inspector (presentation only; Host ParameterStore is truth) ---
+  var paramById = new Map();
+  var paramSessionState = 'disconnected';
+  var paramDeviceName = '';
+  var paramFw = '';
+  var paramQuery = '';
+  var paramEditing = new Map(); // id -> raw text while focused
+
+  function fmtParam(v, type) {
+    if (v === undefined || v === null) return '';
+    if (type === 'bool') return v ? 'true' : 'false';
+    var n = Number(v);
+    if (!isFinite(n)) return String(v);
+    if (type === 'int32' || type === 'uint32') return String(Math.trunc(n));
+    if (Number.isInteger(n)) return String(n);
+    var abs = Math.abs(n);
+    if (abs !== 0 && (abs < 0.001 || abs >= 1e6)) return n.toExponential(4);
+    return n.toFixed(6).replace(/\.?0+$/, '');
+  }
+
+  function localValidate(p, raw) {
+    if (!p.writable) return { ok: false, error: 'read-only' };
+    if (p.type === 'bool') {
+      if (typeof raw === 'boolean') return { ok: true, value: raw };
+      var s = String(raw).toLowerCase();
+      if (s === 'true' || s === '1') return { ok: true, value: true };
+      if (s === 'false' || s === '0') return { ok: true, value: false };
+      return { ok: false, error: 'bool' };
+    }
+    var n = Number(String(raw).trim());
+    if (!isFinite(n)) return { ok: false, error: 'number' };
+    if ((p.type === 'int32' || p.type === 'uint32') && !Number.isInteger(n)) {
+      return { ok: false, error: 'integer' };
+    }
+    if (p.type === 'uint32' && n < 0) return { ok: false, error: 'uint32 >= 0' };
+    if (p.min !== undefined && n < p.min) return { ok: false, error: 'min ' + p.min };
+    if (p.max !== undefined && n > p.max) return { ok: false, error: 'max ' + p.max };
+    return { ok: true, value: n };
+  }
+
+  function paramMatches(p, q) {
+    if (!q) return true;
+    var path = p.path.toLowerCase();
+    if (path.indexOf(q) >= 0) return true;
+    var leaf = path.slice(path.lastIndexOf('.') + 1);
+    if (leaf.indexOf(q) >= 0) return true;
+    if (p.unit && String(p.unit).toLowerCase().indexOf(q) >= 0) return true;
+    return false;
+  }
+
+  function buildTree(list) {
+    var root = [];
+    var map = {};
+    function ensure(full, name) {
+      if (map[full]) return map[full];
+      var node = { name: name, fullPath: full, children: [], parameter: null };
+      map[full] = node;
+      var dot = full.lastIndexOf('.');
+      if (dot > 0) {
+        var parent = full.slice(0, dot);
+        ensure(parent, parent.slice(parent.lastIndexOf('.') + 1)).children.push(node);
+      } else {
+        root.push(node);
+      }
+      return node;
+    }
+    var sorted = list.slice().sort(function (a, b) {
+      return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+    });
+    for (var i = 0; i < sorted.length; i++) {
+      var p = sorted[i];
+      var parts = p.path.split('.').filter(Boolean);
+      if (!parts.length) continue;
+      var acc = '';
+      for (var j = 0; j < parts.length - 1; j++) {
+        acc = acc ? acc + '.' + parts[j] : parts[j];
+        ensure(acc, parts[j]);
+      }
+      var leaf = ensure(parts.join('.'), parts[parts.length - 1]);
+      leaf.parameter = p;
+    }
+    return root;
+  }
+
+  function renderParams() {
+    var stateEl = document.getElementById('params-state');
+    var devEl = document.getElementById('params-device');
+    var listEl = document.getElementById('params-list');
+    if (!listEl) return;
+
+    var stateText = {
+      disconnected: '未连接 Native 设备',
+      handshaking: '正在握手…',
+      discovering: '正在发现参数…',
+      ready: '已就绪',
+      incompatible: '协议版本不兼容',
+      discovery_failed: '参数发现超时/失败',
+    };
+    stateEl.textContent = stateText[paramSessionState] || paramSessionState;
+    if (paramSessionState === 'ready') {
+      devEl.textContent =
+        (paramDeviceName || 'Device') +
+        (paramFw ? ' · FW ' + paramFw : '') +
+        ' · ' +
+        paramById.size +
+        ' Parameters';
+    } else {
+      devEl.textContent = '';
+    }
+
+    if (paramSessionState !== 'ready') {
+      listEl.innerHTML = '<div class="param-empty"></div>';
+      return;
+    }
+    if (paramById.size === 0) {
+      listEl.innerHTML = '<div class="param-empty">设备未声明参数</div>';
+      return;
+    }
+
+    var q = paramQuery.trim().toLowerCase();
+    var visible = [];
+    paramById.forEach(function (p) {
+      if (paramMatches(p, q)) visible.push(p);
+    });
+    if (!visible.length) {
+      listEl.innerHTML = '<div class="param-empty">无匹配参数</div>';
+      return;
+    }
+
+    var tree = buildTree(visible);
+    listEl.innerHTML = '';
+    function renderNode(node, depth) {
+      if (node.parameter) {
+        var p = node.parameter;
+        var row = document.createElement('div');
+        row.className = 'param-row';
+        row.dataset.id = String(p.id);
+        if (p.pending) row.classList.add('pending');
+        if (p.lastError) row.classList.add('err');
+        else if (!p.pending && p.confirmedValue !== undefined) row.classList.add('ok');
+
+        var name = document.createElement('span');
+        name.className = 'pname';
+        name.textContent = node.name;
+        name.title = p.path;
+        row.appendChild(name);
+
+        if (p.type === 'bool') {
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = !!p.confirmedValue;
+          cb.disabled = !p.writable || !!p.pending;
+          cb.addEventListener('change', function () {
+            if (!p.writable || p.pending) return;
+            vscode.postMessage({ type: 'parameter.set', parameterId: p.id, value: cb.checked });
+          });
+          row.appendChild(cb);
+        } else {
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.inputMode = p.type === 'float32' ? 'decimal' : 'numeric';
+          if (p.min !== undefined) input.title = 'min ' + p.min + (p.max !== undefined ? ' max ' + p.max : '');
+          var editing = paramEditing.get(p.id);
+          input.value = editing !== undefined ? editing : fmtParam(p.confirmedValue, p.type);
+          input.disabled = !p.writable || !!p.pending;
+          input.addEventListener('focus', function () {
+            paramEditing.set(p.id, input.value);
+          });
+          input.addEventListener('input', function () {
+            paramEditing.set(p.id, input.value);
+          });
+          function commit() {
+            if (!p.writable || p.pending) {
+              paramEditing.delete(p.id);
+              return;
+            }
+            var raw = input.value;
+            var v = localValidate(p, raw);
+            if (!v.ok) {
+              input.value = fmtParam(p.confirmedValue, p.type);
+              paramEditing.delete(p.id);
+              return;
+            }
+            var cur = p.confirmedValue;
+            if (cur === v.value || (typeof cur === 'number' && typeof v.value === 'number' && cur === v.value)) {
+              paramEditing.delete(p.id);
+              return;
+            }
+            paramEditing.delete(p.id);
+            vscode.postMessage({ type: 'parameter.set', parameterId: p.id, value: v.value });
+          }
+          input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commit();
+            } else if (e.key === 'Escape') {
+              input.value = fmtParam(p.confirmedValue, p.type);
+              paramEditing.delete(p.id);
+              input.blur();
+            }
+          });
+          input.addEventListener('blur', commit);
+          row.appendChild(input);
+        }
+
+        var unit = document.createElement('span');
+        unit.className = 'punit';
+        unit.textContent = p.unit || '';
+        row.appendChild(unit);
+
+        if (p.pending) {
+          var pend = document.createElement('div');
+          pend.className = 'perr';
+          pend.style.color = 'var(--vscode-focusBorder, #007acc)';
+          pend.textContent =
+            'pending → ' + fmtParam(p.pending.requestedValue, p.type);
+          row.appendChild(pend);
+        }
+        if (p.lastError) {
+          var err = document.createElement('div');
+          err.className = 'perr';
+          err.textContent = p.lastError.detail || 'error';
+          row.appendChild(err);
+        }
+        listEl.appendChild(row);
+        return;
+      }
+      if (!node.children.length) return;
+      var det = document.createElement('details');
+      det.className = 'param-group';
+      det.open = depth < 2 || !!q;
+      var sum = document.createElement('summary');
+      sum.textContent = node.name;
+      det.appendChild(sum);
+      for (var i = 0; i < node.children.length; i++) {
+        renderNode(node.children[i], depth + 1);
+      }
+      listEl.appendChild(det);
+    }
+    for (var i = 0; i < tree.length; i++) renderNode(tree[i], 0);
+  }
+
+  function applyParametersSnapshot(msg) {
+    paramSessionState = msg.sessionState || 'disconnected';
+    paramDeviceName = msg.deviceName || '';
+    paramFw = msg.firmwareVersion || '';
+    paramById.clear();
+    var list = msg.parameters || [];
+    for (var i = 0; i < list.length; i++) paramById.set(list[i].id, list[i]);
+    paramEditing.clear();
+    renderParams();
+  }
+
+  function applyParametersUpdate(msg) {
+    var p = msg.parameter;
+    if (!p || typeof p.id !== 'number') return;
+    paramById.set(p.id, p);
+    // incremental: update one row if present, else full render
+    var row = document.querySelector('.param-row[data-id="' + p.id + '"]');
+    if (row && !paramQuery) {
+      // cheap path: still rebuild this row via full render of list only when needed
+      // Full list rebuild is OK at low param counts; avoid every-50ms because host is event-driven.
+      renderParams();
+    } else {
+      renderParams();
+    }
+  }
+
+  document.getElementById('params-search').addEventListener('input', function (e) {
+    paramQuery = e.target.value || '';
+    renderParams();
+  });
+
   window.addEventListener('message', function (event) {
     var msg = event.data;
     if (msg.type === 'plot.snapshot') applySnapshot(msg);
     else if (msg.type === 'plot.delta') applyDelta(msg);
     else if (msg.type === 'plot.reset') applyReset(msg);
     else if (msg.type === 'raw') appendTerm(msg.entries);
+    else if (msg.type === 'parameters.snapshot') applyParametersSnapshot(msg);
+    else if (msg.type === 'parameters.update') applyParametersUpdate(msg);
     else if (msg.type === 'status') {
       var drop = msg.droppedUiEntries ? ' · dropUI ' + msg.droppedUiEntries : '';
       document.getElementById('status').textContent =

@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.2.19
+
+- S12 Parameter Inspector：Workbench 右侧参数面板（path 分组、搜索、float/int/uint/bool、readonly）
+- SET → pending → ACK(appliedValue) / NACK / timeout；Host ParameterStore 为唯一真值
+- Bridge：`parameters.snapshot` + `parameters.update`（事件驱动，非 50ms 全量）
+
 ## 0.2.18
 
 - S10 语义收紧：Host 先拒超范围 SET；unsolicited PARAM_VALUE 要求有效 parameterId；discovery 2s 超时

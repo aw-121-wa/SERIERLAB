@@ -57,8 +57,21 @@ function getHtml(webview: vscode.Webview, ext: vscode.Uri): string {
     <span id="span-info" class="hint"></span>
     <span id="status" class="status"></span>
   </div>
-  <div id="plot"></div>
-  <div id="legend"></div>
+  <div class="main-grid">
+    <div class="plot-col">
+      <div id="plot"></div>
+      <div id="legend"></div>
+    </div>
+    <aside class="params-col" id="params-col">
+      <div class="params-header">
+        <div class="params-title">Parameters</div>
+        <div id="params-state" class="params-state">—</div>
+        <div id="params-device" class="params-device"></div>
+        <input id="params-search" class="params-search" placeholder="搜索 path / unit…" />
+      </div>
+      <div id="params-list" class="params-list"></div>
+    </aside>
+  </div>
   <div class="term-wrap">
     <div id="term" class="term"></div>
   </div>
