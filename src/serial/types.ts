@@ -25,11 +25,21 @@ export interface SerialPortLike {
 }
 
 /** Injectable SerialPort constructor for tests without hardware. */
-export type SerialPortCtor = new (options: {
+export type SerialPortOpenOptions = {
   path: string;
   baudRate: number;
+  dataBits?: 5 | 6 | 7 | 8;
+  stopBits?: 1 | 1.5 | 2;
+  parity?: 'none' | 'even' | 'odd' | 'mark' | 'space';
+  /** Hardware flow control (RTS/CTS). */
+  rtscts?: boolean;
+  /** Software flow control (XON/XOFF). */
+  xon?: boolean;
+  xoff?: boolean;
   autoOpen: boolean;
-}) => SerialPortLike;
+};
+
+export type SerialPortCtor = new (options: SerialPortOpenOptions) => SerialPortLike;
 
 /** Raw OS port entry (subset of serialport PortInfo). */
 export type RawPortInfo = {

@@ -15,6 +15,7 @@ import { HostToWebview, WebviewToHost } from './webview/bridge';
 import { formatRawLog } from './export/exportService';
 import { getPanel } from './webview/panel';
 import { CustomProtocolConfig } from './protocol/custom';
+import { toSerialPortOpenOptions } from './serial/framing';
 import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
 
 export class AppController implements vscode.Disposable {
@@ -248,11 +249,20 @@ export class AppController implements vscode.Disposable {
       void vscode.window.showWarningMessage('Serial Lab: select a serial port first');
       return;
     }
-    // Project serial defaults apply on next connect; active connection is not reset.
-    const baud = this.projectConfig.snapshot().effective.serial.baudRate || conn.baudRate;
+    // Full framing from project > settings > defaults; applied on next connect only.
+    const eff = this.projectConfig.snapshot().effective.serial;
+    const open = toSerialPortOpenOptions(conn.path, {
+      baudRate: eff.baudRate || conn.baudRate,
+      dataBits: eff.dataBits,
+      parity: eff.parity,
+      stopBits: eff.stopBits,
+      flowControl: eff.flowControl,
+    });
     try {
-      await this.serial.connect(conn.path, baud);
-      log.info(`Connected ${conn.path} @ ${baud}`);
+      await this.serial.connect(open);
+      log.info(
+        `Connected ${open.path} @ ${open.baudRate} ${open.dataBits}${String(open.parity)[0]}${open.stopBits} rtscts=${open.rtscts} xon=${open.xon}`
+      );
     } catch (e) {
       void vscode.window.showErrorMessage(`Serial Lab connect failed: ${(e as Error).message}`);
     }

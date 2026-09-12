@@ -6,6 +6,7 @@ import {
   PortInfo,
   SerialPortCtor,
   SerialPortLike,
+  SerialPortOpenOptions,
   SerialServiceDeps,
 } from './types';
 
@@ -40,11 +41,19 @@ export class SerialService extends EventEmitter {
     }));
   }
 
-  async connect(path: string, baudRate: number): Promise<void> {
+  /**
+   * Open a port with full framing options (baud + data/stop/parity + flow control).
+   * @param options path/baudRate required; other fields fall back to serialport defaults.
+   */
+  async connect(options: SerialPortOpenOptions | string, baudRate?: number): Promise<void> {
+    const openOpts: SerialPortOpenOptions =
+      typeof options === 'string'
+        ? { path: options, baudRate: baudRate ?? 115200, autoOpen: false }
+        : { ...options, autoOpen: false };
     await this.disconnect();
     this.setState('connecting');
     await new Promise<void>((resolve, reject) => {
-      const port = new this.SerialPortImpl({ path, baudRate, autoOpen: false });
+      const port = new this.SerialPortImpl(openOpts);
       port.open((err) => {
         if (err) {
           this.lastError = err.message;
