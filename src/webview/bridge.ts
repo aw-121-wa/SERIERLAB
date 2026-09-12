@@ -26,7 +26,7 @@ export type HostToWebview =
       rxBytes: number;
       txBytes: number;
       errors: number;
-      channels: { id: string; path: string; displayName: string; unit?: string; color: string; visible: boolean; value?: number }[];
+      channels: { id: string; path: string; displayName: string; unit?: string; color: string; visible: boolean; value?: number; sourceKind?: string; pollRateHz?: number }[];
       droppedUiEntries?: number;
       droppedUiBytes?: number;
       tMs?: number;

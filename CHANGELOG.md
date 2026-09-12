@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.2.24
+
+- S13 Unified Runtime Sources：SWD 变量进入统一 Channel → SeriesStore → Plot（可与 UART 同图）
+- 侧栏通道徽章 UART / NATIVE / SWD；稳定 id = ELF key + symbol
+- 集中 poll timer；SessionClock 时间戳；variable-write 事件类型预留
+
 ## 0.2.22
 
 - 保留 Native 调参，新增独立的 SWD / DAPLink 参数来源：pyOCD 运行态附加、ELF/DWARF 变量选择、低频轮询、RAM 校验及写后读回。

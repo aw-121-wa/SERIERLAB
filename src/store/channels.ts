@@ -6,6 +6,8 @@ import {
   legacyCustomChannelId,
 } from './channelIdentity';
 
+export type ChannelSourceKind = 'serial' | 'native' | 'swd';
+
 export type ChannelView = {
   /** Stable internal identity. Never changes when displayName/color/visible/unit change. */
   id: string;
@@ -16,6 +18,9 @@ export type ChannelView = {
   unit?: string;
   color: string;
   visible: boolean;
+  /** Runtime data source badge (UART / Native / SWD). */
+  sourceKind?: ChannelSourceKind;
+  pollRateHz?: number;
 };
 
 /** Legacy saved-pref shape (pre-S8 used `name`). */
@@ -123,6 +128,37 @@ export class ChannelRegistry {
   }
 
   /**
+   * Register an SWD-backed runtime channel (plot source).
+   * Id must already be stable (elf key + symbol), not a raw address.
+   */
+  registerSwdChannel(opts: {
+    id: string;
+    path: string;
+    displayName?: string;
+    unit?: string;
+    pollRateHz?: number;
+  }): ChannelView {
+    const existing = this.channels.get(opts.id);
+    if (existing) {
+      if (opts.unit !== undefined) existing.unit = opts.unit;
+      if (opts.pollRateHz !== undefined) existing.pollRateHz = opts.pollRateHz;
+      return existing;
+    }
+    const view: ChannelView = {
+      id: opts.id,
+      path: opts.path,
+      displayName: opts.displayName || opts.path.split('.').slice(-1)[0] || opts.path,
+      unit: opts.unit,
+      color: defaultColor(this.channels.size),
+      visible: true,
+      sourceKind: 'swd',
+      pollRateHz: opts.pollRateHz,
+    };
+    this.channels.set(opts.id, view);
+    return view;
+  }
+
+  /**
    * Builtin discovery: justfloat/firewater/raw.
    * id === path === protocolId.ch<sourceIndex> (frozen).
    */
@@ -222,6 +258,7 @@ export class ChannelRegistry {
       unit: usePref?.unit ?? unit,
       color: usePref?.color ?? color,
       visible: usePref?.visible ?? true,
+      sourceKind: 'serial',
     };
     this.channels.set(id, next);
     return next;

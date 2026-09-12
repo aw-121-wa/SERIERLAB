@@ -3,6 +3,18 @@ import * as path from 'path';
 import { SwdClient } from './client';
 import { resolvePython } from './runtime';
 import { ParameterView } from '../protocol/native/parameterView';
+import { swdChannelId } from './runtimeChannels';
+
+export type SwdPlotPush = {
+  channelId: string;
+  path: string;
+  type: ParameterView['type'];
+  value: number | boolean;
+  unit?: string;
+  writable: boolean;
+  min?: number;
+  max?: number;
+};
 
 export class SwdController implements vscode.Disposable {
   private client?: SwdClient;
@@ -15,8 +27,14 @@ export class SwdController implements vscode.Disposable {
   parameters: ParameterView[] = [];
   state = 'disconnected';
   detail = '';
+  elfPath = '';
 
-  constructor(private context: vscode.ExtensionContext, private changed: (update?: ParameterView) => void) {}
+  constructor(
+    private context: vscode.ExtensionContext,
+    private changed: (update?: ParameterView) => void,
+    /** Called after a successful poll with values intended for SeriesStore/Plot. */
+    private onPlotSample?: (samples: SwdPlotPush[]) => void
+  ) {}
 
   private settings() {
     const cfg = vscode.workspace.getConfiguration('serialLab');
@@ -91,11 +109,13 @@ export class SwdController implements vscode.Disposable {
       this.client = client;
       const result = await client.request<{ parameters: ParameterView[]; verifiedBytes: number }>('connect', cfg.args);
       if (generation !== this.generation) return;
+      this.elfPath = cfg.args.elf;
       this.parameters = result.parameters;
       this.state = 'ready'; this.detail = `SWD · 已核对 ${result.verifiedBytes} 字节 Flash`;
       this.changed();
       await this.refresh();
       if (generation === this.generation && this.state === 'ready' && cfg.pollHz > 0) {
+        // Single central timer — not one setInterval per variable.
         this.timer = setInterval(() => { void this.refresh(); }, 1000 / cfg.pollHz);
       }
     } catch (e) {
@@ -110,10 +130,27 @@ export class SwdController implements vscode.Disposable {
     try {
       const values = await this.client.request<{ id: number; value: number | boolean }[]>('read');
       if (generation !== this.generation) return;
+      const plot: SwdPlotPush[] = [];
       for (const { id, value } of values) {
         const p = this.parameters.find(p => p.id === id);
-        if (p && !p.pending) { p.confirmedValue = value; this.changed(p); }
+        if (p && !p.pending) {
+          p.confirmedValue = value;
+          this.changed(p);
+          if (this.elfPath && value !== undefined) {
+            plot.push({
+              channelId: swdChannelId(this.elfPath, p.path),
+              path: p.path,
+              type: p.type,
+              value,
+              unit: p.unit,
+              writable: p.writable,
+              min: p.min,
+              max: p.max,
+            });
+          }
+        }
       }
+      if (plot.length) this.onPlotSample?.(plot);
     } catch (e) { if (generation === this.generation) this.fail(e); }
     finally { if (generation === this.generation) this.reading = false; }
   }

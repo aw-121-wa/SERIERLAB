@@ -24,8 +24,8 @@ import {
   parseWebviewSetValue,
   toParameterView,
 } from './protocol/native/parameterView';
+import { SwdController, SwdPlotPush } from './swd/controller';
 import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
-import { SwdController } from './swd/controller';
 
 export class AppController implements vscode.Disposable {
   readonly serial = new SerialService();
@@ -49,12 +49,16 @@ export class AppController implements vscode.Disposable {
   private timer: NodeJS.Timeout | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    this.swd = new SwdController(context, (p) => {
-      if (this.parameterSource === 'swd') {
-        if (p) this.post({ type: 'parameters.update', source: 'swd', epoch: this.parameterEpoch, parameter: p });
-        else { ++this.parameterEpoch; this.pushNativeParameters(); }
-      }
-    });
+    this.swd = new SwdController(
+      context,
+      (p) => {
+        if (this.parameterSource === 'swd') {
+          if (p) this.post({ type: 'parameters.update', source: 'swd', epoch: this.parameterEpoch, parameter: p });
+          else { ++this.parameterEpoch; this.pushNativeParameters(); }
+        }
+      },
+      (samples) => this.feedSwdSamples(samples)
+    );
     this.raw = new RawBuffer(vscode.workspace.getConfiguration('serialLab').get<number>('rawBufferBytes') ?? 2 * 1024 * 1024);
     this.series = new SeriesStore(
       (vscode.workspace.getConfiguration('serialLab').get<number>('historySeconds') ?? 60) * 1000
@@ -169,6 +173,36 @@ export class AppController implements vscode.Disposable {
       const value = this.series.lastValue(c.id);
       return value === undefined ? { ...c } : { ...c, value };
     });
+  }
+
+  /** S13: SWD poll → unified Channel → SeriesStore → Plot (same path as UART). */
+  private feedSwdSamples(samples: SwdPlotPush[]): void {
+    const t = this.nowMs();
+    const ids: string[] = [];
+    const values: number[] = [];
+    for (const s of samples) {
+      const view = this.channels.registerSwdChannel({
+        id: s.channelId,
+        path: s.path,
+        displayName: s.path,
+        unit: s.unit,
+        pollRateHz: undefined,
+      });
+      this.series.setMeta(view.id, {
+        path: view.path,
+        displayName: view.displayName,
+        unit: view.unit,
+        color: view.color,
+        visible: view.visible,
+      });
+      const num = typeof s.value === 'number' ? s.value : s.value ? 1 : 0;
+      if (!Number.isFinite(num)) continue;
+      ids.push(view.id);
+      values.push(num);
+    }
+    if (!ids.length) return;
+    this.series.append(t, values, ids);
+    this.plot.addPoints(t, values, ids);
   }
 
   private onRx(bytes: Uint8Array): void {

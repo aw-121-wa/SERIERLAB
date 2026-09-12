@@ -2,17 +2,29 @@
 
 ## Architecture debt
 
-- **Unify DisplayRing**: `src/store/displayRing.ts` (TS, tested) and `src/webview/media/main.js` (hand-rolled JS) can drift. Prefer one shared source or a bundler step; keep `webviewDisplayRing.api.test.ts` until then.
-- **COM port in workspace settings**: saveConnection no longer writes path (S9), but legacy `serialLab.connection.path` may remain in user settings files.
-- **S11.1 RX SPSC visibility**: document/verify ISR producer vs `sl_process` consumer index ownership; consider `_Atomic`/barriers before Cortex-M bring-up.
-- **S11.1 setter contract**: setter returning true MUST have written final value to `param->address` before return (ACK read-back).
-- **Embedded Memory Pass**: `SL_TX_QUEUE_DEPTH` 2/4/8; report RAM for small/default/high-throughput.
+- **Unify DisplayRing**: TS vs main.js can drift — keep api test until bundler merge.
+- **S11.1 RX SPSC visibility**: verify producer/consumer index ownership on Cortex-M.
+- **S11.1 setter contract**: setter true ⇒ final value already at `param->address`.
+- **Embedded Memory Pass**: `SL_TX_QUEUE_DEPTH` 2/4/8 + RAM report.
 
-## Roadmap (updated)
+## Frozen roadmap (do not implement out of order)
 
-- S8–S11 done (identity, project config, native host, C SDK)
-- S12 Parameter Inspector UI ← current
-- S13 Command / Event
-- S14 Session Recorder
-- S15 Replay
-- S16 SWD / ELF (optional later)
+### S13 Unified Runtime Sources ← current
+
+SWD variable → Channel → SeriesStore → Plot. Same plot as UART telemetry.
+Central poll scheduler (not per-var timers). SessionClock timestamps.
+Stable id: ELF identity + symbol, never bare RAM address.
+Stop and wait for review after S13.
+
+### S14 Code-Aware Runtime Debug
+
+Source hover/edit/watch/plot via ELF/DWARF. Fixed-address objects only in v1.
+Depends on S13 channel identity.
+
+### S15 Experiment Session
+
+Record firmware hash + telemetry + SWD + parameter edits. Replay without writes.
+
+### After S13–S15
+
+README / GIF / Release / Marketplace / resume — do not pile CAN/FFT/3D.
