@@ -97,6 +97,81 @@ export class SwdController implements vscode.Disposable {
     } finally { helper.dispose(); }
   }
 
+  isWatching(expression: string): boolean {
+    return this.parameters.some((p) => p.path === expression);
+  }
+
+  /**
+   * Idempotent watch ensure. Adds to swd.watch if needed and reconnects
+   * so the existing poll loop picks it up (no second timer).
+   */
+  async ensureWatch(expression: string): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration('serialLab');
+    const watch = cfg.get<{ path: string }[]>('swd.watch', []) ?? [];
+    const alreadyListed = watch.some((w) => w.path === expression);
+    if (!alreadyListed) {
+      if (watch.length >= 64) throw new Error('最多 64 个 SWD watch 参数');
+      await cfg.update(
+        'swd.watch',
+        [...watch, { path: expression }],
+        vscode.ConfigurationTarget.Workspace
+      );
+    }
+    if (this.state === 'ready' && this.isWatching(expression)) return;
+    if (this.state === 'disconnected' && !alreadyListed) {
+      // Saved for next connect; caller may connect explicitly.
+      return;
+    }
+    if (this.state !== 'disconnected') {
+      await this.connect();
+    }
+  }
+
+  /**
+   * Serialized SWD write with read-back (backend write already returns actual).
+   * Does not start a second pyOCD session.
+   */
+  async writeValueReadback(
+    expression: string,
+    value: number | boolean
+  ): Promise<{ oldValue: number | boolean | undefined; readback: number | boolean }> {
+    if (this.state !== 'ready' || !this.client) throw new Error('SWD 未连接');
+    const p = this.parameters.find((x) => x.path === expression);
+    if (!p) throw new Error(`变量未 Watch：${expression}`);
+    if (!p.writable) throw new Error('只读变量');
+    if (this.writing) throw new Error('SWD 正在写入，请稍后');
+    const generation = this.generation;
+    this.writing = true;
+    const oldValue = p.confirmedValue;
+    p.pending = { requestedValue: value };
+    p.lastError = undefined;
+    this.changed(p);
+    try {
+      // Wait until in-flight poll finishes so read/write/readback stay ordered.
+      while (this.reading && generation === this.generation) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      if (generation !== this.generation) throw new Error('SWD 会话已断开');
+      const readback = await this.client.request<number | boolean>('write', {
+        id: p.id,
+        value,
+      });
+      if (generation === this.generation) {
+        p.confirmedValue = readback;
+      }
+      return { oldValue, readback };
+    } catch (e) {
+      if (this.client?.isClosed) this.fail(e);
+      throw e;
+    } finally {
+      if (generation === this.generation) {
+        this.writing = false;
+        p.pending = undefined;
+        this.changed(p);
+      }
+    }
+  }
+
   connect(): Promise<void> {
     if (this.connecting) return this.connecting;
     if (this.state === 'ready') return Promise.resolve();

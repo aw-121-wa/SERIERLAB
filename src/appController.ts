@@ -25,9 +25,13 @@ import {
   toParameterView,
 } from './protocol/native/parameterView';
 import { SwdController, SwdPlotPush } from './swd/controller';
-import { RuntimeSymbolService } from './runtime/runtimeSymbolService';
+import { RuntimeSymbolService, RuntimeSymbolResolution } from './runtime/runtimeSymbolService';
 import { HoverRuntimeSource } from './runtime/runtimeHover';
 import { normalizeSourceScope } from './runtime/runtimeSymbolIdentity';
+import {
+  RuntimeVariableEditor,
+  VariableWriteEventFull,
+} from './runtime/runtimeVariableEditor';
 import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
 
 export class AppController implements vscode.Disposable {
@@ -45,6 +49,8 @@ export class AppController implements vscode.Disposable {
   readonly plot = new PlotPresenter();
   private native: NativeSession | undefined;
   private runtimeSymbols: RuntimeSymbolService | undefined;
+  private runtimeEditor: RuntimeVariableEditor | undefined;
+  private runtimeEvents: VariableWriteEventFull[] = [];
   private readonly swd: SwdController;
   private parameterSource: 'native' | 'swd' = 'native';
   private parameterEpoch = 0;
@@ -220,6 +226,61 @@ export class AppController implements vscode.Disposable {
         return { value: p.confirmedValue };
       },
     };
+  }
+
+  private ensureRuntimeEditor(): RuntimeVariableEditor {
+    if (!this.runtimeEditor) {
+      this.runtimeEditor = new RuntimeVariableEditor({
+        symbols: () => this.runtimeSymbols,
+        clock: this.clock,
+        readValue: async (sym) => {
+          await this.swd.ensureWatch(sym.expression);
+          const p = this.swd.parameters.find((x) => x.path === sym.expression);
+          return p?.confirmedValue;
+        },
+        writeValue: async (sym, value) => {
+          const { readback } = await this.swd.writeValueReadback(sym.expression, value);
+          return { readback };
+        },
+        emitEvent: (e) => {
+          this.runtimeEvents.push(e);
+          if (this.runtimeEvents.length > 200) this.runtimeEvents.shift();
+          log.info(`runtime-write ${e.expression} ${e.success ? 'ok' : 'fail'}`);
+        },
+      });
+    }
+    return this.runtimeEditor;
+  }
+
+  resolveAtEditor(): RuntimeSymbolResolution | { ok: false; reason: 'no-editor' } {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return { ok: false, reason: 'no-editor' };
+    const svc = this.runtimeSymbols;
+    if (!svc) return { ok: false, reason: 'symbol-not-found', detail: 'SWD/ELF 未就绪' };
+    const doc = editor.document;
+    return svc.resolveAtSource(doc.getText(), doc.offsetAt(editor.selection.active), doc.uri.fsPath);
+  }
+
+  async watchRuntimeAtCursor(): Promise<string> {
+    const r = this.resolveAtEditor();
+    if (!r.ok) throw new Error(r.reason === 'no-editor' ? '请在 C/C++ 源码编辑器中使用' : '光标下没有受支持的运行时变量');
+    if (!this.runtimeSymbols?.isCurrent(r.symbol)) throw new Error('固件已变更，请重新加载 ELF');
+    this.parameterSource = 'swd';
+    await this.swd.ensureWatch(r.symbol.expression);
+    return r.symbol.expression;
+  }
+
+  async plotRuntimeAtCursor(): Promise<string> {
+    // S13 plots all watched SWD vars; Add to Plot = ensure watch (idempotent).
+    return this.watchRuntimeAtCursor();
+  }
+
+  getRuntimeEditor(): RuntimeVariableEditor {
+    return this.ensureRuntimeEditor();
+  }
+
+  getRuntimeEvents(): VariableWriteEventFull[] {
+    return this.runtimeEvents.slice();
   }
 
   /** S13: SWD poll → unified Channel → SeriesStore → Plot (same path as UART). */

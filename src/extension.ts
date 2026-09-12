@@ -7,6 +7,7 @@ import { registerSidebar } from './webview/sidebar';
 import * as state from './state/workspaceState';
 import { resolvePython, installTargetPack } from './swd/runtime';
 import { RuntimeHoverProvider } from './runtime/runtimeHoverProvider';
+import { validateRuntimeEditInput } from './runtime/runtimeVariableEditor';
 
 let controller: AppController | undefined;
 
@@ -69,6 +70,92 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('serialLab.exportRawLog', async () => {
       const uri = await vscode.window.showSaveDialog({ filters: { Log: ['csv', 'log', 'txt'] }, defaultUri: vscode.Uri.file('raw-log.csv') });
       if (uri) controller!.exportRaw(uri);
+    }),
+    vscode.commands.registerCommand('serialLab.runtime.watch', async () => {
+      try {
+        const path = await controller!.watchRuntimeAtCursor();
+        void vscode.window.showInformationMessage(`Serial Lab: watching ${path}`);
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Serial Lab: ${(e as Error).message}`);
+      }
+    }),
+    vscode.commands.registerCommand('serialLab.runtime.plot', async () => {
+      try {
+        const path = await controller!.plotRuntimeAtCursor();
+        void vscode.window.showInformationMessage(`Serial Lab: plotting ${path}`);
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Serial Lab: ${(e as Error).message}`);
+      }
+    }),
+    vscode.commands.registerCommand('serialLab.runtime.reveal', async () => {
+      try {
+        const path = await controller!.watchRuntimeAtCursor();
+        revealPanel(context, (m) => controller!.handleWebviewMessage(m as WebviewToHost));
+        void vscode.window.showInformationMessage(`Serial Lab: revealed ${path}`);
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Serial Lab: ${(e as Error).message}`);
+      }
+    }),
+    vscode.commands.registerCommand('serialLab.runtime.edit', async () => {
+      const c = controller!;
+      const resolved = c.resolveAtEditor();
+      if (!resolved.ok) {
+        void vscode.window.showErrorMessage(
+          resolved.reason === 'no-editor'
+            ? '请在 C/C++ 源码编辑器中使用'
+            : '光标下没有受支持的运行时变量'
+        );
+        return;
+      }
+      const symbol = resolved.symbol;
+      const editor = c.getRuntimeEditor();
+      let prepared;
+      try {
+        prepared = await editor.prepare(symbol);
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Serial Lab: ${(e as Error).message}`);
+        return;
+      }
+      let raw: string | boolean | undefined;
+      if (symbol.type === 'bool') {
+        const pick = await vscode.window.showQuickPick(
+          [
+            { label: 'true', value: true },
+            { label: 'false', value: false },
+          ],
+          { placeHolder: `${symbol.expression} = ${prepared.oldValue === undefined ? '?' : prepared.oldValue}` }
+        );
+        raw = pick?.value;
+      } else {
+        raw = await vscode.window.showInputBox({
+          prompt: `Edit ${symbol.expression} (${symbol.type})`,
+          value: prepared.oldValue === undefined ? '' : String(prepared.oldValue),
+          validateInput: (v) => {
+            const check = validateRuntimeEditInput(symbol.type, v);
+            return check.ok ? null : check.error;
+          },
+        });
+      }
+      if (raw === undefined || raw === '') return;
+      const parsed = validateRuntimeEditInput(symbol.type, raw);
+      if (!parsed.ok) {
+        void vscode.window.showErrorMessage(`Serial Lab: ${parsed.error}`);
+        return;
+      }
+      // Re-resolve at commit time (TOCTOU: firmware may change while dialog is open).
+      const result = await editor.commit(prepared, parsed.value, () => {
+        const again = c.resolveAtEditor();
+        return again.ok ? again.symbol : undefined;
+      });
+      if (result.success) {
+        const rb = result.event.readbackValue;
+        void vscode.window.showInformationMessage(
+          `Serial Lab: ${symbol.expression} = ${rb}` +
+            (result.event.requestedValue !== rb ? ` (requested ${result.event.requestedValue})` : '')
+        );
+      } else {
+        void vscode.window.showErrorMessage(`Serial Lab: ${result.error}`);
+      }
     })
   );
 }

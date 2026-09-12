@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.2.30
+
+- S14.3 源码右键：Watch / Add to Plot / Edit / Reveal Runtime Variable
+- RuntimeVariableEditor：prepare → commit 时重新 resolve，固件或地址变更则中止写入
+- SWD write+read-back 串行化；RuntimeEvent（SessionClock）
+- TOCTOU 回归：ELF 切换 / 地址变化 → 0 次 backend write
+
 ## 0.2.29
 
 - S14.2.2：CU scope 使用 **完整路径**（`DW_AT_comp_dir`+`DW_AT_name`），不再 basename

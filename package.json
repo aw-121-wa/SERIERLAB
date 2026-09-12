@@ -2,7 +2,7 @@
   "name": "serial-lab",
   "displayName": "Serial Lab",
   "description": "Serial debugging workbench: protocols, waveform, terminal, export",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "icon": "images/icon.png",
   "publisher": "czt123",
   "repository": {
@@ -29,7 +29,11 @@
     "onCommand:serialLab.disconnect",
     "onCommand:serialLab.exportSamples",
     "onCommand:serialLab.exportRawLog",
-    "onCommand:serialLab.editProjectConfig"
+    "onCommand:serialLab.editProjectConfig",
+    "onCommand:serialLab.runtime.watch",
+    "onCommand:serialLab.runtime.plot",
+    "onCommand:serialLab.runtime.edit",
+    "onCommand:serialLab.runtime.reveal"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -87,8 +91,48 @@
       {
         "command": "serialLab.swd.installTargetPack",
         "title": "Serial Lab: Install SWD Target Pack"
+      },
+      {
+        "command": "serialLab.runtime.watch",
+        "title": "Serial Lab: Watch Runtime Variable"
+      },
+      {
+        "command": "serialLab.runtime.plot",
+        "title": "Serial Lab: Add Runtime Variable to Plot"
+      },
+      {
+        "command": "serialLab.runtime.edit",
+        "title": "Serial Lab: Edit Runtime Variable"
+      },
+      {
+        "command": "serialLab.runtime.reveal",
+        "title": "Serial Lab: Reveal in Runtime Inspector"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "serialLab.runtime.watch",
+          "when": "editorLangId == c || editorLangId == cpp",
+          "group": "serialLab@1"
+        },
+        {
+          "command": "serialLab.runtime.plot",
+          "when": "editorLangId == c || editorLangId == cpp",
+          "group": "serialLab@2"
+        },
+        {
+          "command": "serialLab.runtime.edit",
+          "when": "editorLangId == c || editorLangId == cpp",
+          "group": "serialLab@3"
+        },
+        {
+          "command": "serialLab.runtime.reveal",
+          "when": "editorLangId == c || editorLangId == cpp",
+          "group": "serialLab@4"
+        }
+      ]
+    },
     "jsonValidation": [
       {
         "fileMatch": ".seriallab.json",
