@@ -1,7 +1,6 @@
 {
-    "serialLab.protocol": "justfloat",
+    "serialLab.protocol": "native",
     "serialLab.connection": {
-        "path": "COM3",
         "baudRate": 115200,
         "dataBits": 8,
         "parity": "none",
