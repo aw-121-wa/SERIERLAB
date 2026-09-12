@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { swdChannelId } from '../swd/runtimeChannels';
+import { firmwareIdentityFromBytes, swdChannelId } from '../swd/runtimeChannels';
 import { ChannelRegistry } from '../store/channels';
 import { SeriesStore } from '../store/seriesStore';
 
@@ -8,10 +8,11 @@ describe('S13 SWD poll bench (informational)', () => {
   it('20 vars × 20Hz × 10min stays bounded', () => {
     const reg = new ChannelRegistry();
     const store = new SeriesStore(600_000, 20_000);
+    const sha = firmwareIdentityFromBytes(Buffer.from('bench-elf')).sha256;
     const ids: string[] = [];
     for (let i = 0; i < 20; i++) {
       const path = `var${i}.x`;
-      const id = swdChannelId('/fw/bench.elf', path);
+      const id = swdChannelId(sha, path);
       reg.registerSwdChannel({ id, path, pollRateHz: 20 });
       store.setMeta(id, { path, displayName: path, color: '#888', visible: true });
       ids.push(id);

@@ -186,7 +186,7 @@ export class AppController implements vscode.Disposable {
         path: s.path,
         displayName: s.path,
         unit: s.unit,
-        pollRateHz: undefined,
+        pollRateHz: s.pollRateHz,
       });
       this.series.setMeta(view.id, {
         path: view.path,

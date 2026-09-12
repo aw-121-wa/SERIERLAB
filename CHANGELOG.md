@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.2.25
+
+- S13.1：SWD Channel ID 使用 **ELF 文件内容 SHA-256**（16 hex），不是路径哈希
+- 同路径重编译 → firmware identity 变化 → 不复用旧 watch/channel id
+- disconnect 清空 elfSha256，禁止 stale RAM watch
+- `pollRateHz` 明确为全局实际轮询率（v1 非 per-variable）
+
 ## 0.2.24
 
 - S13 Unified Runtime Sources：SWD 变量进入统一 Channel → SeriesStore → Plot（可与 UART 同图）

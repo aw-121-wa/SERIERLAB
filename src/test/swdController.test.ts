@@ -8,6 +8,16 @@ vi.mock('vscode', () => ({
   },
   Uri: { joinPath: (...parts: any[]) => ({ fsPath: parts.join('/') }) },
 }));
+vi.mock('../swd/runtimeChannels', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../swd/runtimeChannels')>();
+  return {
+    ...mod,
+    firmwareIdentityFromPath: () => ({
+      sha256: 'a'.repeat(64),
+      idPrefix: 'a'.repeat(16),
+    }),
+  };
+});
 vi.mock('../swd/client', () => ({ SwdClient: class {
   request = vi.fn(async (method: string) => method === 'connect'
     ? { parameters: [{ id: 1, path: 'kp', type: 'float32', writable: true }], verifiedBytes: 128 }

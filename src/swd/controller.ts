@@ -3,7 +3,7 @@ import * as path from 'path';
 import { SwdClient } from './client';
 import { resolvePython } from './runtime';
 import { ParameterView } from '../protocol/native/parameterView';
-import { swdChannelId } from './runtimeChannels';
+import { firmwareIdentityFromPath, swdChannelId } from './runtimeChannels';
 
 export type SwdPlotPush = {
   channelId: string;
@@ -14,6 +14,8 @@ export type SwdPlotPush = {
   writable: boolean;
   min?: number;
   max?: number;
+  /** Actual global SWD poll rate at sample time (not a per-variable request). */
+  pollRateHz?: number;
 };
 
 export class SwdController implements vscode.Disposable {
@@ -28,6 +30,10 @@ export class SwdController implements vscode.Disposable {
   state = 'disconnected';
   detail = '';
   elfPath = '';
+  /** Full SHA-256 of ELF file bytes at last successful connect. */
+  elfSha256 = '';
+  /** Actual global poll rate (S13 v1 — not per-variable). */
+  pollHz = 0;
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -110,6 +116,9 @@ export class SwdController implements vscode.Disposable {
       const result = await client.request<{ parameters: ParameterView[]; verifiedBytes: number }>('connect', cfg.args);
       if (generation !== this.generation) return;
       this.elfPath = cfg.args.elf;
+      // Firmware identity = content hash. Same path after rebuild ⇒ different identity.
+      this.elfSha256 = firmwareIdentityFromPath(cfg.args.elf).sha256;
+      this.pollHz = cfg.pollHz;
       this.parameters = result.parameters;
       this.state = 'ready'; this.detail = `SWD · 已核对 ${result.verifiedBytes} 字节 Flash`;
       this.changed();
@@ -136,9 +145,9 @@ export class SwdController implements vscode.Disposable {
         if (p && !p.pending) {
           p.confirmedValue = value;
           this.changed(p);
-          if (this.elfPath && value !== undefined) {
+          if (this.elfSha256 && value !== undefined) {
             plot.push({
-              channelId: swdChannelId(this.elfPath, p.path),
+              channelId: swdChannelId(this.elfSha256, p.path),
               path: p.path,
               type: p.type,
               value,
@@ -146,6 +155,7 @@ export class SwdController implements vscode.Disposable {
               writable: p.writable,
               min: p.min,
               max: p.max,
+              pollRateHz: this.pollHz,
             });
           }
         }
@@ -190,7 +200,10 @@ export class SwdController implements vscode.Disposable {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined; this.reading = false; this.writing = false;
     const client = this.client; this.client = undefined;
-    this.parameters = []; this.state = 'disconnected'; this.detail = ''; this.changed();
+    this.parameters = []; this.state = 'disconnected'; this.detail = '';
+    // Drop firmware identity so stale watches cannot be reused after ELF change.
+    this.elfPath = ''; this.elfSha256 = ''; this.pollHz = 0;
+    this.changed();
     if (client) this.closing = this.closing.then(() => client.close()).catch(() => {});
     await this.closing;
   }

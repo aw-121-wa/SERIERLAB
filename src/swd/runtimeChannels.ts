@@ -1,12 +1,30 @@
 import { createHash } from 'crypto';
 
-/** Stable SWD channel id: ELF identity + semantic path (never bare address). */
-export function swdElfKey(elfPath: string): string {
-  return createHash('sha256').update(elfPath.replace(/\\/g, '/').toLowerCase()).digest('hex').slice(0, 8);
+/**
+ * Firmware identity = SHA-256 of ELF **file bytes** (not path).
+ * Recompiling to the same path changes identity and must invalidate watches.
+ */
+export type FirmwareIdentity = {
+  /** Full 64-hex SHA-256 of ELF contents. */
+  sha256: string;
+  /** Prefix used in channel ids (16 hex = 64-bit). */
+  idPrefix: string;
+};
+
+export function firmwareIdentityFromBytes(bytes: Uint8Array | Buffer): FirmwareIdentity {
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  return { sha256, idPrefix: sha256.slice(0, 16) };
 }
 
-export function swdChannelId(elfPath: string, expression: string): string {
-  return `swd.${swdElfKey(elfPath)}.${expression}`;
+export function firmwareIdentityFromPath(elfPath: string): FirmwareIdentity {
+  // Lazy require keeps this module importable in unit tests without fs fixtures when unused.
+  const { readFileSync } = require('fs') as typeof import('fs');
+  return firmwareIdentityFromBytes(readFileSync(elfPath));
+}
+
+/** Stable SWD channel id: firmware content id + semantic path (never bare address). */
+export function swdChannelId(firmwareSha256: string, expression: string): string {
+  return `swd.${firmwareSha256.slice(0, 16)}.${expression}`;
 }
 
 export type SwdPlotSample = {
@@ -18,14 +36,14 @@ export type SwdPlotSample = {
 };
 
 /**
- * Central SWD poll schedule — one timer owner, bounded rates.
- * High-rate telemetry stays on UART; SWD is low-rate observation.
+ * S13 v1: one global SWD poll rate for all watches (serialLab.swd.pollHz).
+ * Channel.pollRateHz mirrors that actual global rate — not per-variable scheduling.
  */
 export const SWD_POLL_HZ = [1, 5, 10, 20, 50] as const;
 export type SwdPollHz = (typeof SWD_POLL_HZ)[number];
 
 export function clampSwdPollHz(hz: number): number {
-  if (!Number.isFinite(hz) || hz <= 0) return 0; // 0 = no plot poll
+  if (!Number.isFinite(hz) || hz <= 0) return 0;
   if (hz >= 50) return 50;
   if (hz >= 20) return 20;
   if (hz >= 10) return 10;
@@ -33,7 +51,6 @@ export function clampSwdPollHz(hz: number): number {
   return 1;
 }
 
-/** In-memory variable-write markers (S15 will persist). */
 export type VariableWriteEvent = {
   type: 'variable-write';
   source: 'swd' | 'native';
