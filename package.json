@@ -1,0 +1,104 @@
+{
+  "name": "serial-lab",
+  "displayName": "Serial Lab",
+  "description": "Serial debugging workbench: protocols, waveform, terminal, export",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MPL-2.0",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other", "Debuggers"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "serialLab",
+          "title": "Serial Lab",
+          "icon": "$(radio-tower)"
+        }
+      ]
+    },
+    "views": {
+      "serialLab": [
+        {
+          "id": "serialLab.sidebar",
+          "name": "Workbench",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "serialLab.openWorkbench", "title": "Serial Lab: Open Workbench" },
+      { "command": "serialLab.refreshPorts", "title": "Serial Lab: Refresh Ports" },
+      { "command": "serialLab.connect", "title": "Serial Lab: Connect" },
+      { "command": "serialLab.disconnect", "title": "Serial Lab: Disconnect" },
+      { "command": "serialLab.exportSamples", "title": "Serial Lab: Export Samples CSV" },
+      { "command": "serialLab.exportRawLog", "title": "Serial Lab: Export Raw Log" }
+    ],
+    "configuration": {
+      "title": "Serial Lab",
+      "properties": {
+        "serialLab.connection": {
+          "type": "object",
+          "default": { "path": "", "baudRate": 115200, "dataBits": 8, "parity": "none", "stopBits": 1 },
+          "description": "Last serial connection settings"
+        },
+        "serialLab.protocol": {
+          "type": "string",
+          "default": "justfloat",
+          "enum": ["justfloat", "firewater", "raw", "custom"],
+          "description": "Active protocol id (custom uses serialLab.activeCustomProtocolId)"
+        },
+        "serialLab.activeCustomProtocolId": {
+          "type": "string",
+          "default": "",
+          "description": "Selected custom protocol id when serialLab.protocol is custom"
+        },
+        "serialLab.protocols": {
+          "type": "array",
+          "default": [],
+          "description": "User-defined custom protocols"
+        },
+        "serialLab.channels": {
+          "type": "object",
+          "default": {},
+          "description": "Per-channel alias, color, visible keyed by stable id"
+        },
+        "serialLab.terminal": {
+          "type": "object",
+          "default": { "rxEncoding": "text", "txEncoding": "text", "txLineEnding": "lf" },
+          "description": "Terminal encodings and TX line ending"
+        },
+        "serialLab.historySeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 5,
+          "maximum": 600
+        },
+        "serialLab.rawBufferBytes": {
+          "type": "number",
+          "default": 2097152,
+          "minimum": 65536
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "serialport": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

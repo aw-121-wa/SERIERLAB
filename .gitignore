@@ -3,3 +3,5 @@
 .worktrees/
 build/
 out/
+node_modules/
+*.vsix
