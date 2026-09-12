@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.2.18
+
+- S10 语义收紧：Host 先拒超范围 SET；unsolicited PARAM_VALUE 要求有效 parameterId；discovery 2s 超时
+- S11 STM32 C SDK v1（pure C、无堆、无 HAL）：COBS/CRC/frame/RX FIFO/TX pending/HELLO+PARAM_*
+- 显式 parameter table + 可选 setter hook；ACK 为 read-back appliedValue
+- 桌面 gcc 测试与 S10 golden vectors 交叉验证
+
 ## 0.2.17
 
 - S10 Native Runtime Control Protocol v1（PC 端）：COBS+0x00 帧、CRC-16/CCITT-FALSE、HELLO/PARAM_* 消息
