@@ -110,12 +110,55 @@ describe('SeriesStore', () => {
     expect(rows.map((r) => r.split(',')[2])).toEqual(['7', '8', '9', '10', '11']);
   });
 
-  it('stride downsample still applies in getWindow', () => {
+  it('getWindow uses min/max envelope and respects maxPoints budget', () => {
     const s = new SeriesStore(1_000_000, 100);
-    for (let i = 0; i < 100; i++) s.append(i, [i], ['a']);
+    for (let i = 0; i < 100; i++) s.append(i, [i === 47 ? 999 : i], ['a']);
     const w = s.getWindow(10);
-    // stride = ceil(100/10) = 10 → indices 0,10,...,90
-    expect(w[0]!.xs).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    expect(w[0]!.xs.length).toBeLessThanOrEqual(10);
+    expect(w[0]!.ys).toContain(999);
+    expect(w[0]!.xs[0]).toBe(0);
+    expect(w[0]!.xs[w[0]!.xs.length - 1]).toBe(99);
+  });
+
+  it('I: spike survives getWindow after ring wrap', () => {
+    const s = new SeriesStore(1_000_000, 16);
+    for (let i = 0; i < 40; i++) {
+      // spike inside the retained window after wrap
+      const v = i === 33 ? 1e6 : 0;
+      s.append(i, [v], ['ch']);
+    }
+    const w = s.getWindow(8);
+    expect(w[0]!.xs.length).toBeLessThanOrEqual(8);
+    expect(w[0]!.ys).toContain(1e6);
+    expect(w[0]!.xs[0]).toBe(24);
+    expect(w[0]!.xs[w[0]!.xs.length - 1]).toBe(39);
+  });
+
+  it('J: multi-channel downsample is independent', () => {
+    const s = new SeriesStore(1_000_000, 200);
+    for (let i = 0; i < 200; i++) {
+      s.append(i, [i === 50 ? -1 : 0, i === 150 ? 2 : 0], ['a', 'b']);
+    }
+    const w = s.getWindow(20);
+    const byId = Object.fromEntries(w.map((c) => [c.id, c]));
+    expect(byId['a']!.ys).toContain(-1);
+    expect(byId['a']!.ys).not.toContain(2);
+    expect(byId['b']!.ys).toContain(2);
+    expect(byId['b']!.ys).not.toContain(-1);
+    expect(byId['a']!.xs.length).toBeLessThanOrEqual(20);
+    expect(byId['b']!.xs.length).toBeLessThanOrEqual(20);
+  });
+
+  it('exportCsv still has full ring data (not downsampled)', () => {
+    const s = new SeriesStore(1_000_000, 50);
+    for (let i = 0; i < 50; i++) s.append(i, [i === 10 ? 777 : i], ['a']);
+    // force display downsample
+    const w = s.getWindow(5);
+    expect(w[0]!.ys.length).toBeLessThanOrEqual(5);
+    const csv = s.exportCsv();
+    const rows = csv.split('\n').slice(1);
+    expect(rows).toHaveLength(50);
+    expect(csv).toContain('777');
   });
 
   it('skips non-finite values', () => {

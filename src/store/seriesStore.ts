@@ -1,4 +1,5 @@
 import { ChannelRing } from './channelRing';
+import { minMaxDownsampleFrom } from './minMaxDownsample';
 
 export type SeriesPointMeta = { id: string; name: string; color: string; visible: boolean };
 
@@ -55,14 +56,13 @@ export class SeriesStore {
       if (!meta.visible) continue;
       const ring = this.rings.get(id);
       const n = ring?.count ?? 0;
-      const stride = Math.max(1, Math.ceil(n / maxPoints));
-      const oxs: number[] = [];
-      const oys: number[] = [];
-      for (let i = 0; i < n; i += stride) {
-        oxs.push(ring!.xAt(i));
-        oys.push(ring!.yAt(i));
-      }
-      out.push({ ...meta, xs: oxs, ys: oys });
+      const series = minMaxDownsampleFrom(
+        n,
+        (i) => ring!.xAt(i),
+        (i) => ring!.yAt(i),
+        maxPoints
+      );
+      out.push({ ...meta, xs: series.xs, ys: series.ys });
     }
     return out;
   }
