@@ -1,7 +1,14 @@
 import { ChannelRing } from './channelRing';
 import { minMaxDownsampleFrom } from './minMaxDownsample';
 
-export type SeriesPointMeta = { id: string; name: string; color: string; visible: boolean };
+export type SeriesPointMeta = {
+  id: string;
+  path: string;
+  displayName: string;
+  unit?: string;
+  color: string;
+  visible: boolean;
+};
 
 export type ChannelWindow = SeriesPointMeta & { xs: number[]; ys: number[] };
 
@@ -25,10 +32,12 @@ export class SeriesStore {
     return r;
   }
 
-  setMeta(id: string, meta: Partial<SeriesPointMeta> & { name?: string }): void {
+  setMeta(id: string, meta: Partial<SeriesPointMeta>): void {
     const prev = this.meta.get(id) ?? {
       id,
-      name: meta.name ?? id,
+      path: meta.path ?? id,
+      displayName: meta.displayName ?? id,
+      unit: meta.unit,
       color: '#3b82f6',
       visible: true,
     };
@@ -58,7 +67,13 @@ export class SeriesStore {
       const v = values[i];
       if (v === undefined || !Number.isFinite(v)) continue;
       if (!this.meta.has(id)) {
-        this.meta.set(id, { id, name: id, color: '#3b82f6', visible: true });
+        this.meta.set(id, {
+          id,
+          path: id,
+          displayName: id,
+          color: '#3b82f6',
+          visible: true,
+        });
       }
       const ring = this.ringFor(id);
       ring.push(tMs, v);
@@ -94,7 +109,7 @@ export class SeriesStore {
    */
   exportCsv(aliasMap?: Map<string, string>, toIso?: (tMs: number) => string): string {
     const ids = [...this.meta.keys()];
-    const headers = ['t_ms', 'iso_time', ...ids.map((id) => aliasMap?.get(id) ?? this.meta.get(id)!.name)];
+    const headers = ['t_ms', 'iso_time', ...ids.map((id) => aliasMap?.get(id) ?? this.meta.get(id)!.displayName)];
     const maxLen = Math.max(0, ...ids.map((id) => this.rings.get(id)?.count ?? 0));
     const lines: string[] = [headers.join(',')];
     const tRing = this.rings.get(ids[0] ?? '');

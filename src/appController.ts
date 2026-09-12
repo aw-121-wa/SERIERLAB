@@ -39,7 +39,7 @@ export class AppController implements vscode.Disposable {
       maxBytes: uiCfg.get<number>('uiPendingMaxBytes') ?? 512 * 1024,
       maxEntries: uiCfg.get<number>('uiPendingMaxEntries') ?? 4000,
     });
-    this.channels.applySaved(state.loadChannelPrefs());
+    this.channels.applySavedPrefs(state.loadChannelPrefs());
     this.applyProtocolFromState();
     this.serial.on('data', (bytes: Uint8Array) => this.onRx(bytes));
     this.serial.on('state', () => this.pushStatus());
@@ -87,10 +87,18 @@ export class AppController implements vscode.Disposable {
   }
 
   /** Channel list plus live last sample (for sidebar readout). */
-  channelViews(): { id: string; name: string; color: string; visible: boolean; value?: number }[] {
+  channelViews(): {
+    id: string;
+    path: string;
+    displayName: string;
+    unit?: string;
+    color: string;
+    visible: boolean;
+    value?: number;
+  }[] {
     return this.channels.list().map((c) => {
       const value = this.series.lastValue(c.id);
-      return value === undefined ? c : { ...c, value };
+      return value === undefined ? { ...c } : { ...c, value };
     });
   }
 
@@ -101,14 +109,29 @@ export class AppController implements vscode.Disposable {
     if (this.router.protocolKind === 'raw') return;
     const batches = this.router.feed(bytes, t);
     for (const b of batches) {
-      const names = this.customConfig?.channels?.map((c) => c.name);
-      const ids = this.channels.syncFromBatch(b.values.length, this.router.protocolKind, names);
-      for (const id of ids) {
-        const view = this.channels.list().find((c) => c.id === id);
-        this.series.setMeta(id, { name: view?.name ?? id, color: view?.color, visible: view?.visible });
+      // Control plane: discovery + metadata only on change.
+      const sync = this.channels.syncFromBatch(b.values.length, this.router.protocolKind, {
+        protocolConfigId: this.customConfig?.id,
+        channelMeta: this.customConfig?.channels?.map((c) => ({
+          index: c.index,
+          name: c.name,
+          path: c.path,
+          unit: c.unit,
+          color: c.color,
+        })),
+      });
+      for (const ch of sync.changed) {
+        this.series.setMeta(ch.id, {
+          path: ch.path,
+          displayName: ch.displayName,
+          unit: ch.unit,
+          color: ch.color,
+          visible: ch.visible,
+        });
       }
-      this.series.append(b.tMs, b.values, ids);
-      this.plot.addPoints(b.tMs, b.values, ids);
+      // Data plane: ids[i] ↔ values[i]
+      this.series.append(b.tMs, b.values, sync.ids);
+      this.plot.addPoints(b.tMs, b.values, sync.ids);
     }
   }
 

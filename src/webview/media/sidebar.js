@@ -72,7 +72,7 @@
         swatch.style.background = c.color || '#888';
         const name = document.createElement('span');
         name.className = 'ch-name';
-        name.textContent = c.name || c.id;
+        name.textContent = c.displayName || c.name || c.id;
         const val = document.createElement('span');
         val.className = 'ch-value';
         val.textContent = '—';
@@ -106,7 +106,7 @@
       var sw = li.querySelector('.swatch');
       if (sw && c.color) sw.style.background = c.color;
       var nm = li.querySelector('.ch-name');
-      if (nm) nm.textContent = c.name || c.id;
+      if (nm) nm.textContent = c.displayName || c.name || c.id;
     }
   }
 

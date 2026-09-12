@@ -3,7 +3,7 @@ export type HostToWebview =
       type: 'plot.snapshot';
       generation: number;
       seq: number;
-      series: { id: string; name: string; color: string; visible: boolean; xs: number[]; ys: number[] }[];
+      series: { id: string; path: string; displayName: string; unit?: string; color: string; visible: boolean; xs: number[]; ys: number[] }[];
     }
   | {
       type: 'plot.delta';
@@ -26,7 +26,7 @@ export type HostToWebview =
       rxBytes: number;
       txBytes: number;
       errors: number;
-      channels: { id: string; name: string; color: string; visible: boolean }[];
+      channels: { id: string; path: string; displayName: string; unit?: string; color: string; visible: boolean; value?: number }[];
       droppedUiEntries?: number;
       droppedUiBytes?: number;
       tMs?: number;

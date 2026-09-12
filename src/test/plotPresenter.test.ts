@@ -6,7 +6,8 @@ import { ChannelWindow } from '../store/seriesStore';
 function fakeWindow(id = 'ch', n = 3): ChannelWindow {
   return {
     id,
-    name: id,
+    path: id,
+    displayName: id,
     color: '#fff',
     visible: true,
     xs: Array.from({ length: n }, (_, i) => i),

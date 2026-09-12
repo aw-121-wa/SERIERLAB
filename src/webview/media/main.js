@@ -73,14 +73,14 @@
     if (!ch) {
       ch = {
         id: meta.id,
-        name: meta.name || meta.id,
+        name: meta.displayName || meta.name || meta.id,
         color: meta.color || '#3b82f6',
         visible: meta.visible !== false,
         ring: new DisplayRing(DISPLAY_CAP),
       };
       channels.set(meta.id, ch);
     } else {
-      if (meta.name) ch.name = meta.name;
+      if (meta.displayName || meta.name) ch.name = meta.displayName || meta.name;
       if (meta.color) ch.color = meta.color;
       if (meta.visible !== undefined) ch.visible = meta.visible;
     }

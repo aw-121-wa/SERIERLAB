@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.2.15
+
+- S8 Channel Identity：`id` / `path` / `displayName` / `unit` 分离
+- Builtin id 冻结为 `justfloat.ch0` 等；Custom 稳定为 `custom.<protocolId>.idxN`
+- 热路径不再每 batch `list().find` + `setMeta`；仅 discovery/变更时写 metadata
+- Legacy custom prefs（`custom.<name>`）迁移到新 id；兼容旧 `name` 字段
+
 ## 0.2.14
 
 - 修复 X 轴不推进 / 无法缩放：`setScale` 后不再调用默认 `redraw()`（会用旧 scale 覆盖 pending）

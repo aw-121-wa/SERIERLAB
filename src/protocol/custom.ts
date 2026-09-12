@@ -1,6 +1,14 @@
 import { SampleBatch, StreamDecoder } from './types';
 
-export type CustomChannelMap = { index: number; name: string; color?: string };
+export type CustomChannelMap = {
+  index: number;
+  /** Default display name — does not participate in identity. */
+  name: string;
+  /** Optional stable semantic path. */
+  path?: string;
+  unit?: string;
+  color?: string;
+};
 
 export type CustomProtocolConfig = {
   id: string;

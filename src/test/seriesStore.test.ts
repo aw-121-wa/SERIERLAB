@@ -91,11 +91,12 @@ describe('SeriesStore', () => {
   it('clear resets samples but keeps meta', () => {
     const s = new SeriesStore(60_000, 100);
     s.append(1, [5], ['a']);
-    s.setMeta('a', { name: 'Vbus', color: '#fff', visible: true });
+    s.setMeta('a', { displayName: 'Vbus', path: 'pwr.vbus', color: '#fff', visible: true });
     s.clear();
     const w = s.getWindow(100);
     expect(w).toHaveLength(1);
-    expect(w[0]!.name).toBe('Vbus');
+    expect(w[0]!.displayName).toBe('Vbus');
+    expect(w[0]!.path).toBe('pwr.vbus');
     expect(w[0]!.xs).toEqual([]);
     s.append(2, [9], ['a']);
     expect(s.getWindow(100)[0]!.ys).toEqual([9]);
