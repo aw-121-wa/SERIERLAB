@@ -1,0 +1,138 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  padding: 8px;
+}
+
+.section {
+  margin-bottom: 14px;
+}
+
+.section h3 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+select,
+input {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border, #555));
+  border-radius: 3px;
+  background: var(--vscode-dropdown-background, var(--vscode-input-background, #2a2a2a));
+  color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground, #ddd));
+  font-size: inherit;
+}
+
+button {
+  padding: 4px 10px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 3px;
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #fff);
+  cursor: pointer;
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+button:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+button.primary {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+}
+
+button.primary:hover {
+  background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.status {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.status[data-state='connected'] {
+  color: var(--vscode-terminal-ansiGreen, #4ec9b0);
+}
+
+.status[data-state='connecting'] {
+  color: var(--vscode-terminal-ansiYellow, #dcdcaa);
+}
+
+.status[data-state='error'] {
+  color: var(--vscode-terminal-ansiRed, #f44747);
+}
+
+.channels {
+  list-style: none;
+}
+
+.channels li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 2px;
+  font-size: 12px;
+}
+
+.channels li.empty {
+  opacity: 0.6;
+}
+
+.channels li.hidden-ch {
+  opacity: 0.45;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.ch-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ch-vis {
+  opacity: 0.7;
+  font-size: 11px;
+}

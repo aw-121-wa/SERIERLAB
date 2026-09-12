@@ -3,6 +3,7 @@ import { log } from './log';
 import { AppController } from './appController';
 import { revealPanel } from './webview/panel';
 import { WebviewToHost } from './webview/bridge';
+import { registerSidebar } from './webview/sidebar';
 import * as state from './state/workspaceState';
 
 let controller: AppController | undefined;
@@ -11,6 +12,7 @@ export function activate(context: vscode.ExtensionContext): void {
   log.info('Serial Lab activated');
   controller = new AppController(context);
   context.subscriptions.push(controller);
+  registerSidebar(context, controller);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('serialLab.openWorkbench', () => {
