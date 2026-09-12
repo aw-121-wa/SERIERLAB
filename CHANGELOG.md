@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.2.13
+
+- Y 自动量程改用稳健分位数，避免单点尖峰把整段波形压成一条线
+- 始终包含 0，不再强行对称到 ±max（单侧信号不再浪费半幅画面）
+- 时间窗读数与 uPlot 实际 scale 同步
+
+## 0.2.12
+
+- 修复实时波形不滚动：Webview DisplayRing 补齐 `count` / `xAt` / `yAt`（`latestSampleTime` 此前恒为 null）
+- 修复「重置缩放」因 `xAt is not a function` 失效
+- 新增 API 漂移回归测试，锁定 main.js 与 TS DisplayRing 接口一致
+
 ## 0.2.11
 
 - 侧栏每个通道显示实时数值（约 200ms 刷新）

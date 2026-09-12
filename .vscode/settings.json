@@ -12,7 +12,7 @@
             "id": "justfloat.ch0",
             "name": "ch0",
             "color": "#3b82f6",
-            "visible": false
+            "visible": true
         },
         "justfloat.ch1": {
             "id": "justfloat.ch1",
@@ -150,7 +150,7 @@
             "id": "justfloat.ch23",
             "name": "ch23",
             "color": "#84cc16",
-            "visible": true
+            "visible": false
         },
         "justfloat.ch24": {
             "id": "justfloat.ch24",

@@ -49,6 +49,19 @@
     this.head = 0;
     this.len = 0;
   };
+  // Must stay API-compatible with src/store/displayRing.ts —
+  // latestSampleTime() / dataTimeRange() use count + xAt().
+  Object.defineProperty(DisplayRing.prototype, 'count', {
+    get: function () {
+      return this.len;
+    },
+  });
+  DisplayRing.prototype.xAt = function (i) {
+    return this.xs[(this.head + i) % this.capacity];
+  };
+  DisplayRing.prototype.yAt = function (i) {
+    return this.ys[(this.head + i) % this.capacity];
+  };
 
   var DISPLAY_CAP = 4096;
   var plotGeneration = -1;
@@ -79,43 +92,77 @@
   }
 
   /** Y auto-fit: only points inside current X window; always include 0; zero mid-plot. */
+  /**
+   * Y auto-fit for the visible X window.
+   * Uses a robust (2–98%) range so a single spike does not flatten the rest
+   * of the traces. Always includes 0. Not forced fully symmetric — that
+   * wasted half the plot when data sits on one side of zero.
+   */
   function yRangeInXWindow(u, dataMin, dataMax) {
     if (userYZoom && u.scales.y.min != null && u.scales.y.max != null) {
       return [u.scales.y.min, u.scales.y.max];
     }
-    var min = Infinity;
-    var max = -Infinity;
+    var fullMin = Infinity;
+    var fullMax = -Infinity;
+    var samples = [];
     var xmin = u.scales.x.min;
     var xmax = u.scales.x.max;
     var xs = u.data[0] || [];
+    var total = xs.length;
+    var stride = total > 4000 ? Math.ceil(total / 4000) : 1;
     for (var si = 1; si < u.data.length; si++) {
       var ys = u.data[si];
       if (!ys) continue;
-      var show = u.series[si] && u.series[si].show !== false;
-      if (!show) continue;
-      for (var i = 0; i < xs.length; i++) {
+      if (u.series[si] && u.series[si].show === false) continue;
+      for (var i = 0; i < total; i += stride) {
         var x = xs[i];
         if (x == null) continue;
         if (xmin != null && x < xmin) continue;
         if (xmax != null && x > xmax) continue;
         var y = ys[i];
         if (y == null) continue;
-        if (y < min) min = y;
-        if (y > max) max = y;
+        if (y < fullMin) fullMin = y;
+        if (y > fullMax) fullMax = y;
+        samples.push(y);
       }
     }
-    if (min === Infinity) {
-      min = dataMin != null ? dataMin : 0;
-      max = dataMax != null ? dataMax : 0;
+    if (samples.length === 0) {
+      var lo0 = dataMin != null ? dataMin : 0;
+      var hi0 = dataMax != null ? dataMax : 0;
+      lo0 = Math.min(lo0, 0);
+      hi0 = Math.max(hi0, 0);
+      if (!(hi0 > lo0)) {
+        lo0 = -1;
+        hi0 = 1;
+      }
+      var pad0 = (hi0 - lo0) * 0.08;
+      return [lo0 - pad0, hi0 + pad0];
     }
-    min = Math.min(min, 0);
-    max = Math.max(max, 0);
-    if (!(max > min)) {
-      min = -1;
-      max = 1;
+    samples.sort(function (a, b) {
+      return a - b;
+    });
+    var pLo = samples[Math.floor(samples.length * 0.02)];
+    var pHi = samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.98))];
+    var robustSpan = pHi - pLo;
+    var fullSpan = fullMax - fullMin;
+    var lo;
+    var hi;
+    if (robustSpan > 0 && fullSpan > robustSpan * 6) {
+      // Spike-dominated: ignore extreme outliers for auto-scale.
+      lo = pLo;
+      hi = pHi;
+    } else {
+      lo = fullMin;
+      hi = fullMax;
     }
-    var m = Math.max(Math.abs(min), Math.abs(max)) * 1.1;
-    return [-m, m];
+    lo = Math.min(lo, 0);
+    hi = Math.max(hi, 0);
+    if (!(hi > lo)) {
+      lo = -1;
+      hi = 1;
+    }
+    var pad = (hi - lo) * 0.08;
+    return [lo - pad, hi + pad];
   }
 
   function buildData(list) {
@@ -256,7 +303,10 @@
     } finally {
       applyingFollow = false;
     }
-    updateSpanReadout(min, max);
+    // Prefer the scale uPlot actually applied.
+    var sMin = uplot.scales.x.min != null ? uplot.scales.x.min : min;
+    var sMax = uplot.scales.x.max != null ? uplot.scales.x.max : max;
+    updateSpanReadout(sMin, sMax);
   }
 
   function syncSeriesVisibility(list) {
