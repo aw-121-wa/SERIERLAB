@@ -76,6 +76,7 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
         <option value="justfloat">JustFloat</option>
         <option value="firewater">FireWater</option>
         <option value="raw">RawData</option>
+        <option value="native">Native (在线调参)</option>
         <option value="custom">自定义</option>
       </select>
     </div>

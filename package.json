@@ -2,7 +2,7 @@
   "name": "serial-lab",
   "displayName": "Serial Lab",
   "description": "Serial debugging workbench: protocols, waveform, terminal, export",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "icon": "images/icon.png",
   "publisher": "czt123",
   "license": "SEE LICENSE IN LICENSE",
@@ -104,9 +104,10 @@
             "justfloat",
             "firewater",
             "raw",
+            "native",
             "custom"
           ],
-          "description": "Active protocol id (custom uses serialLab.activeCustomProtocolId)"
+          "description": "Active protocol. native = Runtime Control (Parameter Inspector); custom uses serialLab.activeCustomProtocolId"
         },
         "serialLab.activeCustomProtocolId": {
           "type": "string",

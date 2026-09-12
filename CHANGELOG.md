@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.2.21
+
+- 侧栏协议下拉增加 **Native (在线调参)**；settings enum 同步
+
 ## 0.2.20
 
 - S12.1 审计修复：`parameters.update` 真正单行增量更新；每参数 ↻ Refresh（`parameter.refresh`）
