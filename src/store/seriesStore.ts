@@ -1,16 +1,28 @@
+import { ChannelRing } from './channelRing';
+
 export type SeriesPointMeta = { id: string; name: string; color: string; visible: boolean };
 
 export type ChannelWindow = SeriesPointMeta & { xs: number[]; ys: number[] };
 
 export class SeriesStore {
-  private xs = new Map<string, number[]>();
-  private ys = new Map<string, number[]>();
+  private rings = new Map<string, ChannelRing>();
   private meta = new Map<string, SeriesPointMeta>();
 
   constructor(
     private readonly windowMs: number,
     private readonly maxPointsPerChannel = 20_000
-  ) {}
+  ) {
+    if (maxPointsPerChannel < 1) throw new Error('maxPointsPerChannel must be >= 1');
+  }
+
+  private ringFor(id: string): ChannelRing {
+    let r = this.rings.get(id);
+    if (!r) {
+      r = new ChannelRing(this.maxPointsPerChannel);
+      this.rings.set(id, r);
+    }
+    return r;
+  }
 
   setMeta(id: string, meta: Partial<SeriesPointMeta> & { name?: string }): void {
     const prev = this.meta.get(id) ?? {
@@ -20,10 +32,7 @@ export class SeriesStore {
       visible: true,
     };
     this.meta.set(id, { ...prev, ...meta, id });
-    if (!this.xs.has(id)) {
-      this.xs.set(id, []);
-      this.ys.set(id, []);
-    }
+    this.ringFor(id);
   }
 
   append(tMs: number, values: number[], channelIds: string[]): void {
@@ -31,26 +40,12 @@ export class SeriesStore {
       const id = channelIds[i]!;
       const v = values[i];
       if (v === undefined || !Number.isFinite(v)) continue;
-      if (!this.xs.has(id)) {
-        this.xs.set(id, []);
-        this.ys.set(id, []);
-      }
       if (!this.meta.has(id)) {
         this.meta.set(id, { id, name: id, color: '#3b82f6', visible: true });
       }
-      const xs = this.xs.get(id)!;
-      const ys = this.ys.get(id)!;
-      xs.push(tMs);
-      ys.push(v);
-      while (xs.length > this.maxPointsPerChannel) {
-        xs.shift();
-        ys.shift();
-      }
-      const cutoff = tMs - this.windowMs;
-      while (xs.length && xs[0]! < cutoff) {
-        xs.shift();
-        ys.shift();
-      }
+      const ring = this.ringFor(id);
+      ring.push(tMs, v);
+      ring.evictBefore(tMs - this.windowMs);
     }
   }
 
@@ -58,14 +53,14 @@ export class SeriesStore {
     const out: ChannelWindow[] = [];
     for (const [id, meta] of this.meta) {
       if (!meta.visible) continue;
-      const xs = this.xs.get(id) ?? [];
-      const ys = this.ys.get(id) ?? [];
-      const stride = Math.max(1, Math.ceil(xs.length / maxPoints));
+      const ring = this.rings.get(id);
+      const n = ring?.count ?? 0;
+      const stride = Math.max(1, Math.ceil(n / maxPoints));
       const oxs: number[] = [];
       const oys: number[] = [];
-      for (let i = 0; i < xs.length; i += stride) {
-        oxs.push(xs[i]!);
-        oys.push(ys[i]!);
+      for (let i = 0; i < n; i += stride) {
+        oxs.push(ring!.xAt(i));
+        oys.push(ring!.yAt(i));
       }
       out.push({ ...meta, xs: oxs, ys: oys });
     }
@@ -80,14 +75,16 @@ export class SeriesStore {
   exportCsv(aliasMap?: Map<string, string>, toIso?: (tMs: number) => string): string {
     const ids = [...this.meta.keys()];
     const headers = ['t_ms', 'iso_time', ...ids.map((id) => aliasMap?.get(id) ?? this.meta.get(id)!.name)];
-    const maxLen = Math.max(0, ...ids.map((id) => (this.xs.get(id) ?? []).length));
+    const maxLen = Math.max(0, ...ids.map((id) => this.rings.get(id)?.count ?? 0));
     const lines: string[] = [headers.join(',')];
+    const tRing = this.rings.get(ids[0] ?? '');
     for (let i = 0; i < maxLen; i++) {
-      const t = this.xs.get(ids[0] ?? '')?.[i];
+      const t = tRing && i < tRing.count ? tRing.xAt(i) : undefined;
       const iso = t !== undefined && toIso ? toIso(t) : '';
       const row = [String(t ?? ''), iso];
       for (const id of ids) {
-        const v = this.ys.get(id)?.[i];
+        const r = this.rings.get(id);
+        const v = r && i < r.count ? r.yAt(i) : undefined;
         row.push(v === undefined ? '' : String(v));
       }
       lines.push(row.join(','));
@@ -96,9 +93,6 @@ export class SeriesStore {
   }
 
   clear(): void {
-    for (const id of this.xs.keys()) {
-      this.xs.set(id, []);
-      this.ys.set(id, []);
-    }
+    for (const r of this.rings.values()) r.clear();
   }
 }

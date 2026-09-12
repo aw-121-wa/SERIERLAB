@@ -11,6 +11,7 @@ describe('SeriesStore', () => {
     expect(csv).toContain('1');
     expect(csv).toContain('4');
   });
+
   it('evicts old samples', () => {
     const s = new SeriesStore(100, 1000);
     s.append(0, [1], ['p.a']);
@@ -38,5 +39,92 @@ describe('SeriesStore', () => {
     s.append(3215, [1], ['p.a']);
     const csv = s.exportCsv();
     expect(csv.split('\n')[1]).toBe('3215,,1');
+  });
+
+  it('getWindow keeps time order after ring wrap', () => {
+    const s = new SeriesStore(1_000_000, 8);
+    for (let i = 0; i < 20; i++) s.append(i, [i], ['ch']);
+    const w = s.getWindow(100);
+    expect(w[0]!.xs).toEqual([12, 13, 14, 15, 16, 17, 18, 19]);
+    expect(w[0]!.ys).toEqual([12, 13, 14, 15, 16, 17, 18, 19]);
+  });
+
+  it('capacity overflow drops oldest', () => {
+    const s = new SeriesStore(1_000_000, 3);
+    for (let i = 0; i < 10; i++) s.append(i, [i * 2], ['a']);
+    const w = s.getWindow(100);
+    expect(w[0]!.xs).toEqual([7, 8, 9]);
+    expect(w[0]!.ys).toEqual([14, 16, 18]);
+  });
+
+  it('supports capacity 1', () => {
+    const s = new SeriesStore(1_000_000, 1);
+    s.append(1, [10], ['a']);
+    s.append(2, [20], ['a']);
+    const w = s.getWindow(100);
+    expect(w[0]!.xs).toEqual([2]);
+    expect(w[0]!.ys).toEqual([20]);
+  });
+
+  it('keeps channels independent', () => {
+    const s = new SeriesStore(1_000_000, 4);
+    s.append(1, [1, 10], ['a', 'b']);
+    s.append(2, [2, 20], ['a', 'b']);
+    for (let i = 3; i <= 8; i++) s.append(i, [i, i * 10], ['a', 'b']);
+    // b was hidden then shown; both rings full at last 4
+    const w = s.getWindow(100);
+    const byId = Object.fromEntries(w.map((c) => [c.id, c]));
+    expect(byId['a']!.ys).toEqual([5, 6, 7, 8]);
+    expect(byId['b']!.ys).toEqual([50, 60, 70, 80]);
+  });
+
+  it('evicts by 60s history window across wrap', () => {
+    const s = new SeriesStore(60_000, 10_000);
+    for (let i = 0; i < 100; i++) s.append(i * 1000, [i], ['h']);
+    // newest = 99000, cutoff = 39000 → samples with t < 39000 gone (0..38)
+    const w = s.getWindow(1000);
+    expect(w[0]!.xs[0]).toBe(39_000);
+    expect(w[0]!.ys[0]).toBe(39);
+    expect(w[0]!.xs[w[0]!.xs.length - 1]).toBe(99_000);
+  });
+
+  it('clear resets samples but keeps meta', () => {
+    const s = new SeriesStore(60_000, 100);
+    s.append(1, [5], ['a']);
+    s.setMeta('a', { name: 'Vbus', color: '#fff', visible: true });
+    s.clear();
+    const w = s.getWindow(100);
+    expect(w).toHaveLength(1);
+    expect(w[0]!.name).toBe('Vbus');
+    expect(w[0]!.xs).toEqual([]);
+    s.append(2, [9], ['a']);
+    expect(s.getWindow(100)[0]!.ys).toEqual([9]);
+  });
+
+  it('exportCsv stays in logical time order after wrap', () => {
+    const s = new SeriesStore(1_000_000, 5);
+    for (let i = 0; i < 12; i++) s.append(i, [i], ['a']);
+    const csv = s.exportCsv();
+    const rows = csv.split('\n').slice(1);
+    expect(rows.map((r) => r.split(',')[0])).toEqual(['7', '8', '9', '10', '11']);
+    expect(rows.map((r) => r.split(',')[2])).toEqual(['7', '8', '9', '10', '11']);
+  });
+
+  it('stride downsample still applies in getWindow', () => {
+    const s = new SeriesStore(1_000_000, 100);
+    for (let i = 0; i < 100; i++) s.append(i, [i], ['a']);
+    const w = s.getWindow(10);
+    // stride = ceil(100/10) = 10 → indices 0,10,...,90
+    expect(w[0]!.xs).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+  });
+
+  it('skips non-finite values', () => {
+    const s = new SeriesStore(1_000_000, 10);
+    s.append(1, [1, NaN], ['a', 'b']);
+    s.append(2, [2, 3], ['a', 'b']);
+    const w = s.getWindow(10);
+    const byId = Object.fromEntries(w.map((c) => [c.id, c]));
+    expect(byId['a']!.ys).toEqual([1, 2]);
+    expect(byId['b']!.ys).toEqual([3]);
   });
 });
