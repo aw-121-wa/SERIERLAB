@@ -15,6 +15,7 @@ import { HostToWebview, WebviewToHost } from './webview/bridge';
 import { formatRawLog } from './export/exportService';
 import { getPanel } from './webview/panel';
 import { CustomProtocolConfig } from './protocol/custom';
+import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
 
 export class AppController implements vscode.Disposable {
   readonly serial = new SerialService();
@@ -23,6 +24,7 @@ export class AppController implements vscode.Disposable {
   readonly series: SeriesStore;
   readonly channels = new ChannelRegistry();
   readonly clock = new SessionClock();
+  readonly projectConfig = new ProjectConfigService();
   /** Status-bar `t` = latest RX session time, not extension lifetime. */
   private readonly lastRx = new LastRxTracker();
   private customConfig: CustomProtocolConfig | undefined;
@@ -47,11 +49,43 @@ export class AppController implements vscode.Disposable {
     this.serial.on('data', (bytes: Uint8Array) => this.onRx(bytes));
     this.serial.on('state', () => this.pushStatus());
     this.timer = setInterval(() => this.flushUi(), 50);
+    this.projectConfig.onChange((snap) => this.applyProjectConfig(snap));
+    void this.projectConfig.start().then(() => this.applyProjectConfig(this.projectConfig.snapshot()));
     context.subscriptions.push(
+      this.projectConfig,
       vscode.workspace.onDidGrantWorkspaceTrust(() => {
         this.reloadProtocol();
       })
     );
+  }
+
+  /** Apply project channel presentation overrides (never id/path). */
+  private applyProjectConfig(snap: ProjectConfigSnapshot): void {
+    for (const [id, ov] of Object.entries(snap.effective.channels)) {
+      if (ov.displayName !== undefined) this.channels.setDisplayName(id, ov.displayName);
+      if (ov.unit !== undefined) this.channels.setUnit(id, ov.unit);
+      if (ov.color !== undefined) this.channels.setColor(id, ov.color);
+      if (ov.visible !== undefined) this.channels.setVisible(id, ov.visible);
+      const view = this.channels.get(id);
+      if (view) {
+        this.series.setMeta(id, {
+          displayName: view.displayName,
+          unit: view.unit,
+          color: view.color,
+          visible: view.visible,
+        });
+      }
+    }
+    // Project protocol: apply when not connected (avoid surprising live reset).
+    if (this.serial.getState() !== 'connected' && snap.project?.protocol) {
+      const kind = snap.effective.protocol.kind;
+      if (kind === 'custom' && snap.effective.protocol.customId) {
+        void state.saveActiveCustomId(snap.effective.protocol.customId);
+      }
+      void state.saveProtocol(kind);
+      this.applyProtocolFromState();
+    }
+    this.pushStatus();
   }
 
   private nowMs(): number {
@@ -209,14 +243,16 @@ export class AppController implements vscode.Disposable {
   }
 
   async connect(): Promise<void> {
-    const conn = state.loadConnection();
+    const conn = state.loadConnection(this.context);
     if (!conn.path) {
       void vscode.window.showWarningMessage('Serial Lab: select a serial port first');
       return;
     }
+    // Project serial defaults apply on next connect; active connection is not reset.
+    const baud = this.projectConfig.snapshot().effective.serial.baudRate || conn.baudRate;
     try {
-      await this.serial.connect(conn.path, conn.baudRate);
-      log.info(`Connected ${conn.path} @ ${conn.baudRate}`);
+      await this.serial.connect(conn.path, baud);
+      log.info(`Connected ${conn.path} @ ${baud}`);
     } catch (e) {
       void vscode.window.showErrorMessage(`Serial Lab connect failed: ${(e as Error).message}`);
     }
@@ -245,7 +281,7 @@ export class AppController implements vscode.Disposable {
     this.post({
       type: 'status',
       state: this.serial.getState(),
-      path: state.loadConnection().path,
+      path: state.loadConnection(this.context).path,
       protocol: this.router.protocolKind,
       rxBytes: this.serial.rxBytes,
       txBytes: this.serial.txBytes,

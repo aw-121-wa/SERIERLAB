@@ -40,7 +40,7 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     const css = webviewView.webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'media', 'sidebar.css')
     );
-    const conn = state.loadConnection();
+    const conn = state.loadConnection(this.context);
     webviewView.webview.html = `<!DOCTYPE html>
 <html lang="zh-CN"><head>
 <meta charset="UTF-8"/>
@@ -103,17 +103,17 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
           break;
         }
         case 'saveConn': {
-          const c = state.loadConnection();
+          const c = state.loadConnection(this.context);
           if (typeof msg.path === 'string' && msg.path) c.path = msg.path;
           c.baudRate = Number(msg.baudRate) || 115200;
-          await state.saveConnection(c);
+          await state.saveConnection(c, { context: this.context });
           break;
         }
         case 'connect': {
-          const c = state.loadConnection();
+          const c = state.loadConnection(this.context);
           if (typeof msg.path === 'string' && msg.path) c.path = msg.path;
           if (msg.baudRate !== undefined) c.baudRate = Number(msg.baudRate) || 115200;
-          await state.saveConnection(c);
+          await state.saveConnection(c, { context: this.context });
           await this.controller.connect();
           this.pushMirror();
           if (this.controller.serial.getState() === 'connected') {
@@ -176,7 +176,7 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private async pushInit(): Promise<void> {
     await this.post({
       type: 'init',
-      connection: state.loadConnection(),
+      connection: state.loadConnection(this.context),
       protocol: state.loadProtocol(),
     });
   }
@@ -193,10 +193,10 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
       await this.post({
         type: 'ports',
         ports,
-        selected: state.loadConnection().path,
+        selected: state.loadConnection(this.context).path,
       });
     } catch (e) {
-      await this.post({ type: 'ports', ports: [], selected: state.loadConnection().path });
+      await this.post({ type: 'ports', ports: [], selected: state.loadConnection(this.context).path });
       void vscode.window.showErrorMessage(
         `Serial Lab: 列举串口失败: ${(e as Error).message}`
       );

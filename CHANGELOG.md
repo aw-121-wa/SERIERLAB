@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.2.16
+
+- S9 `.seriallab.json` v1：versioned 项目配置（serial framing / protocol / channel 展示）
+- 优先级：`.seriallab.json` > workspace settings > user settings > defaults
+- JSON Schema + `jsonValidation`；坏文件保持 last-known-good
+- 串口 **port** 改存 `workspaceState`，不再自动写入 `.vscode/settings.json`
+- 命令：`Serial Lab: Edit Project Configuration`
+
 ## 0.2.15
 
 - S8 Channel Identity：`id` / `path` / `displayName` / `unit` 分离

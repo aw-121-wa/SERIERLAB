@@ -2,7 +2,7 @@
   "name": "serial-lab",
   "displayName": "Serial Lab",
   "description": "Serial debugging workbench: protocols, waveform, terminal, export",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "icon": "images/icon.png",
   "publisher": "czt123",
   "license": "SEE LICENSE IN LICENSE",
@@ -24,7 +24,8 @@
     "onCommand:serialLab.connect",
     "onCommand:serialLab.disconnect",
     "onCommand:serialLab.exportSamples",
-    "onCommand:serialLab.exportRawLog"
+    "onCommand:serialLab.exportRawLog",
+    "onCommand:serialLab.editProjectConfig"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -70,6 +71,16 @@
       {
         "command": "serialLab.exportRawLog",
         "title": "Serial Lab: Export Raw Log"
+      },
+      {
+        "command": "serialLab.editProjectConfig",
+        "title": "Serial Lab: Edit Project Configuration"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": ".seriallab.json",
+        "url": "./schemas/seriallab.schema.json"
       }
     ],
     "configuration": {

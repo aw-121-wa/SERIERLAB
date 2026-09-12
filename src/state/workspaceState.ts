@@ -12,18 +12,62 @@ export type ConnSettings = {
   stopBits: 1;
 };
 
-export function loadConnection(): ConnSettings {
-  return cfg().get<ConnSettings>('connection') ?? {
-    path: '',
+const PORT_KEY = 'serialLab.selectedPort';
+
+/** Machine-local port lives in workspaceState — never auto-write .vscode/settings.json. */
+export function loadSelectedPort(context: vscode.ExtensionContext): string {
+  return context.workspaceState.get<string>(PORT_KEY) ?? '';
+}
+
+export async function saveSelectedPort(
+  context: vscode.ExtensionContext,
+  port: string
+): Promise<void> {
+  await context.workspaceState.update(PORT_KEY, port);
+}
+
+export function loadConnection(context?: vscode.ExtensionContext): ConnSettings {
+  const fallback = {
+    path: context ? loadSelectedPort(context) : '',
     baudRate: 115200,
-    dataBits: 8,
-    parity: 'none',
-    stopBits: 1,
+    dataBits: 8 as const,
+    parity: 'none' as const,
+    stopBits: 1 as const,
+  };
+  const fromSettings = cfg().get<Partial<ConnSettings>>('connection');
+  return {
+    path: context ? loadSelectedPort(context) : fromSettings?.path ?? fallback.path,
+    baudRate: fromSettings?.baudRate ?? fallback.baudRate,
+    dataBits: (fromSettings?.dataBits ?? fallback.dataBits) as 8,
+    parity: (fromSettings?.parity ?? fallback.parity) as ConnSettings['parity'],
+    stopBits: (fromSettings?.stopBits ?? fallback.stopBits) as 1,
   };
 }
 
-export async function saveConnection(c: ConnSettings): Promise<void> {
-  await cfg().update('connection', c, vscode.ConfigurationTarget.Workspace);
+/**
+ * Persist connection framing to workspace settings only when the user changes baud etc.
+ * Port is stored in workspaceState (machine-local).
+ */
+export async function saveConnection(
+  c: ConnSettings,
+  options?: { context?: vscode.ExtensionContext; saveFramingToSettings?: boolean }
+): Promise<void> {
+  if (options?.context) {
+    await saveSelectedPort(options.context, c.path);
+  }
+  if (options?.saveFramingToSettings !== false) {
+    // Do not include path — avoids dirtying git with COMx.
+    await cfg().update(
+      'connection',
+      {
+        baudRate: c.baudRate,
+        dataBits: c.dataBits,
+        parity: c.parity,
+        stopBits: c.stopBits,
+      },
+      vscode.ConfigurationTarget.Workspace
+    );
+  }
 }
 
 export function loadProtocol(): string {

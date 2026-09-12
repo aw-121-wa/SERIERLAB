@@ -27,12 +27,15 @@ export function activate(context: vscode.ExtensionContext): void {
         { placeHolder: '选择串口' }
       );
       if (picked) {
-        const conn = state.loadConnection();
+        const conn = state.loadConnection(context);
         conn.path = picked.description!;
-        await state.saveConnection(conn);
+        await state.saveConnection(conn, { context, saveFramingToSettings: false });
         void vscode.window.showInformationMessage(`Serial Lab: port set to ${conn.path}`);
       }
     }),
+    vscode.commands.registerCommand('serialLab.editProjectConfig', () =>
+      controller!.projectConfig.editProjectConfig()
+    ),
     vscode.commands.registerCommand('serialLab.exportSamples', async () => {
       const uri = await vscode.window.showSaveDialog({ filters: { CSV: ['csv'] }, defaultUri: vscode.Uri.file('samples.csv') });
       if (uri) controller!.exportSamples(uri);

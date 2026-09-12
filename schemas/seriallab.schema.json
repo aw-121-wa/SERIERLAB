@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Serial Lab project configuration",
+  "description": "Versioned project defaults for Serial Lab. Machine-specific port is never stored here.",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Config schema version (must be 1)"
+    },
+    "serial": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Serial framing defaults for this project. Does not include the physical port.",
+      "properties": {
+        "baudRate": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Baud rate"
+        },
+        "dataBits": {
+          "type": "integer",
+          "enum": [5, 6, 7, 8]
+        },
+        "parity": {
+          "type": "string",
+          "enum": ["none", "even", "odd", "mark", "space"]
+        },
+        "stopBits": {
+          "type": "number",
+          "enum": [1, 1.5, 2]
+        },
+        "flowControl": {
+          "type": "string",
+          "enum": ["none", "hardware", "software"]
+        }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["raw", "justfloat", "firewater", "custom"]
+        },
+        "customId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required when kind is custom. References serialLab.protocols[].id"
+        }
+      }
+    },
+    "channels": {
+      "type": "object",
+      "description": "Presentation overrides keyed by stable Channel.id (e.g. justfloat.ch0). Cannot override id/path.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "displayName": { "type": "string" },
+          "unit": { "type": "string" },
+          "color": {
+            "type": "string",
+            "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
+          },
+          "visible": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
