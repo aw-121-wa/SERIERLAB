@@ -12,7 +12,16 @@ export type CustomProtocolConfig = {
   skipPrefix?: string;
   channels?: CustomChannelMap[];
   allowChannelCountChange?: boolean;
+  /** Experimental. Runs on the extension host via `new Function`; disabled when workspace is untrusted. */
   script?: string;
+};
+
+export type CustomProtocolDecoderOptions = {
+  /**
+   * When false, script mode does not compile/run (untrusted workspace).
+   * Config mode is unaffected. Default: true.
+   */
+  scriptAllowed?: boolean;
 };
 
 const MAX_PENDING = 64 * 1024;
@@ -39,14 +48,29 @@ export class CustomProtocolDecoder implements StreamDecoder {
   private runner: ((line: string) => number[] | null) | null = null;
   errors = 0;
   scriptTimeouts = 0;
+  /** True when mode=script but the workspace is untrusted (or explicitly disallowed). */
+  readonly scriptBlocked = false;
+  /** True when config.mode === 'script' (Experimental surface). */
+  readonly scriptExperimental = false;
 
-  constructor(private readonly config: CustomProtocolConfig) {
-    if (config.mode === 'script' && config.script) {
-      try {
-        this.runner = new Function('line', config.script) as (line: string) => number[] | null;
-      } catch {
+  constructor(
+    private readonly config: CustomProtocolConfig,
+    options: CustomProtocolDecoderOptions = {}
+  ) {
+    if (config.mode === 'script') {
+      (this as { scriptExperimental: boolean }).scriptExperimental = true;
+      const scriptAllowed = options.scriptAllowed !== false;
+      if (!scriptAllowed) {
+        (this as { scriptBlocked: boolean }).scriptBlocked = true;
         this.runner = null;
         this.errors += 1;
+      } else if (config.script) {
+        try {
+          this.runner = new Function('line', config.script) as (line: string) => number[] | null;
+        } catch {
+          this.runner = null;
+          this.errors += 1;
+        }
       }
     }
   }

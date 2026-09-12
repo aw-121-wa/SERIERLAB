@@ -44,4 +44,48 @@ describe('CustomProtocolDecoder', () => {
     d.feed(enc('abc\n'), 1);
     expect(d.errors).toBeGreaterThan(0);
   });
+
+  it('blocks script mode when scriptAllowed is false', () => {
+    const d = new CustomProtocolDecoder(
+      {
+        id: 'c4',
+        name: 's',
+        mode: 'script',
+        script: 'return [1];',
+      },
+      { scriptAllowed: false }
+    );
+    expect(d.scriptBlocked).toBe(true);
+    expect(d.scriptExperimental).toBe(true);
+    expect(d.errors).toBeGreaterThan(0);
+    expect(d.feed(enc('X;1\n'), 1)).toHaveLength(0);
+  });
+
+  it('config mode is unaffected when scriptAllowed is false', () => {
+    const d = new CustomProtocolDecoder(
+      {
+        id: 'c5',
+        name: 'cfg',
+        mode: 'config',
+        delimiter: 'comma',
+      },
+      { scriptAllowed: false }
+    );
+    expect(d.scriptBlocked).toBe(false);
+    expect(d.scriptExperimental).toBe(false);
+    const b = d.feed(enc('1,2,3\n'), 1);
+    expect(b[0]!.values).toEqual([1, 2, 3]);
+  });
+
+  it('marks script mode as experimental', () => {
+    const d = new CustomProtocolDecoder({
+      id: 'c6',
+      name: 's',
+      mode: 'script',
+      script: 'return [1];',
+    });
+    expect(d.scriptExperimental).toBe(true);
+    expect(d.scriptBlocked).toBe(false);
+    expect(d.feed(enc('x\n'), 1)[0]!.values).toEqual([1]);
+  });
 });

@@ -42,6 +42,11 @@ export class AppController implements vscode.Disposable {
     this.serial.on('data', (bytes: Uint8Array) => this.onRx(bytes));
     this.serial.on('state', () => this.pushStatus());
     this.timer = setInterval(() => this.flushUi(), 50);
+    context.subscriptions.push(
+      vscode.workspace.onDidGrantWorkspaceTrust(() => {
+        this.reloadProtocol();
+      })
+    );
   }
 
   private nowMs(): number {
@@ -50,6 +55,7 @@ export class AppController implements vscode.Disposable {
 
   private applyProtocolFromState(): void {
     const p = state.loadProtocol();
+    const scriptAllowed = vscode.workspace.isTrusted;
     if (p === 'custom') {
       const id = state.loadActiveCustomId();
       const cfg = state.loadCustomProtocols().find((c) => c.id === id) ?? {
@@ -58,12 +64,17 @@ export class AppController implements vscode.Disposable {
         mode: 'config' as const,
       };
       this.customConfig = cfg;
-      this.router.setProtocol({ kind: 'custom', config: cfg });
+      this.router.setProtocol({ kind: 'custom', config: cfg }, { scriptAllowed });
     } else {
       this.customConfig = undefined;
       if (p === 'firewater') this.router.setProtocol({ kind: 'firewater' });
       else if (p === 'raw') this.router.setProtocol({ kind: 'raw' });
       else this.router.setProtocol({ kind: 'justfloat' });
+    }
+    if (this.router.scriptBlocked) {
+      void vscode.window.showWarningMessage(
+        'Serial Lab: Script Protocol 为 Experimental，且在不受信任的工作区中已禁用。请信任工作区后重试。'
+      );
     }
   }
 

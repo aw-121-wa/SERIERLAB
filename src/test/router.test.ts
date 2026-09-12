@@ -12,4 +12,36 @@ describe('ProtocolRouter', () => {
     const b = r.feed(new TextEncoder().encode('3,4\n'), 3);
     expect(b).toHaveLength(1);
   });
+
+  it('exposes scriptBlocked for untrusted custom script protocols', () => {
+    const r = new ProtocolRouter();
+    r.setProtocol(
+      {
+        kind: 'custom',
+        config: {
+          id: 's1',
+          name: 's',
+          mode: 'script',
+          script: 'return [1];',
+        },
+      },
+      { scriptAllowed: false }
+    );
+    expect(r.scriptBlocked).toBe(true);
+    expect(r.protocolKind).toBe('custom');
+  });
+
+  it('clears scriptBlocked when switching back to builtin', () => {
+    const r = new ProtocolRouter();
+    r.setProtocol(
+      {
+        kind: 'custom',
+        config: { id: 's1', name: 's', mode: 'script', script: 'return [1];' },
+      },
+      { scriptAllowed: false }
+    );
+    expect(r.scriptBlocked).toBe(true);
+    r.setProtocol('justfloat');
+    expect(r.scriptBlocked).toBe(false);
+  });
 });

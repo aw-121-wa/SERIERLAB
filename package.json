@@ -18,7 +18,13 @@
     "Debuggers"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onView:serialLab.sidebar",
+    "onCommand:serialLab.openWorkbench",
+    "onCommand:serialLab.refreshPorts",
+    "onCommand:serialLab.connect",
+    "onCommand:serialLab.disconnect",
+    "onCommand:serialLab.exportSamples",
+    "onCommand:serialLab.exportRawLog"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -99,7 +105,7 @@
         "serialLab.protocols": {
           "type": "array",
           "default": [],
-          "description": "User-defined custom protocols"
+          "description": "User-defined custom protocols. mode=script is Experimental and is disabled when the workspace is untrusted."
         },
         "serialLab.channels": {
           "type": "object",

@@ -11,6 +11,7 @@ export type ProtocolSelection =
 export class ProtocolRouter {
   private decoder: StreamDecoder = new JustFloatDecoder();
   private kind: string = 'justfloat';
+  private blocked = false;
 
   get protocolKind(): string {
     return this.kind;
@@ -20,28 +21,43 @@ export class ProtocolRouter {
     return this.decoder.errors;
   }
 
-  setProtocol(selection: BuiltinProtocolId | ProtocolSelection): void {
+  /** True when the active custom script protocol was blocked (e.g. untrusted workspace). */
+  get scriptBlocked(): boolean {
+    return this.blocked;
+  }
+
+  setProtocol(
+    selection: BuiltinProtocolId | ProtocolSelection,
+    options?: { scriptAllowed?: boolean }
+  ): void {
     const kind = typeof selection === 'string' ? selection : selection.kind;
     const config =
       typeof selection === 'object' && selection.kind === 'custom' ? selection.config : undefined;
     if (kind === this.kind && kind !== 'custom') {
       this.decoder.reset();
+      this.blocked = false;
       return;
     }
     this.kind = kind;
     switch (kind) {
       case 'justfloat':
         this.decoder = new JustFloatDecoder();
+        this.blocked = false;
         break;
       case 'firewater':
         this.decoder = new FireWaterDecoder();
+        this.blocked = false;
         break;
       case 'raw':
         this.decoder = new RawDataDecoder();
+        this.blocked = false;
         break;
-      case 'custom':
-        this.decoder = new CustomProtocolDecoder(config!);
+      case 'custom': {
+        const d = new CustomProtocolDecoder(config!, { scriptAllowed: options?.scriptAllowed });
+        this.decoder = d;
+        this.blocked = d.scriptBlocked;
         break;
+      }
     }
   }
 
