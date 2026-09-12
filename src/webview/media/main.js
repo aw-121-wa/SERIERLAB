@@ -843,6 +843,16 @@
           });
           input.addEventListener('blur', commit);
           row.appendChild(input);
+          var ref = document.createElement('button');
+          ref.type = 'button';
+          ref.className = 'prefresh';
+          ref.title = 'Refresh from device';
+          ref.textContent = '↻';
+          ref.disabled = !!p.pending;
+          ref.addEventListener('click', function () {
+            vscode.postMessage({ type: 'parameter.refresh', parameterId: p.id });
+          });
+          row.appendChild(ref);
         }
 
         var unit = document.createElement('span');
@@ -893,19 +903,51 @@
     renderParams();
   }
 
+  /** Update a single visible row in place (no full list rebuild). */
+  function updateParamRow(p) {
+    var row = document.querySelector('.param-row[data-id="' + p.id + '"]');
+    if (!row) return false;
+    // Keep focus/edit buffer if user is typing this field
+    if (paramEditing.has(p.id)) return true;
+    var input = row.querySelector('input[type="text"], input[type="number"]');
+    if (input && document.activeElement === input) return true;
+    if (p.type === 'bool') {
+      var cb = row.querySelector('input[type="checkbox"]');
+      if (cb) {
+        cb.checked = !!p.confirmedValue;
+        cb.disabled = !p.writable || !!p.pending;
+      }
+    } else if (input) {
+      input.value = fmtParam(p.confirmedValue, p.type);
+      input.disabled = !p.writable || !!p.pending;
+    }
+    row.classList.toggle('pending', !!p.pending);
+    row.classList.toggle('err', !!p.lastError);
+    row.classList.toggle('ok', !p.pending && !p.lastError && p.confirmedValue !== undefined);
+    var old = row.querySelector('.perr');
+    if (old) old.remove();
+    if (p.pending) {
+      var pend = document.createElement('div');
+      pend.className = 'perr';
+      pend.style.color = 'var(--vscode-focusBorder, #007acc)';
+      pend.textContent = 'pending → ' + fmtParam(p.pending.requestedValue, p.type);
+      row.appendChild(pend);
+    }
+    if (p.lastError) {
+      var err = document.createElement('div');
+      err.className = 'perr';
+      err.textContent = p.lastError.detail || 'error';
+      row.appendChild(err);
+    }
+    return true;
+  }
+
   function applyParametersUpdate(msg) {
     var p = msg.parameter;
     if (!p || typeof p.id !== 'number') return;
     paramById.set(p.id, p);
-    // incremental: update one row if present, else full render
-    var row = document.querySelector('.param-row[data-id="' + p.id + '"]');
-    if (row && !paramQuery) {
-      // cheap path: still rebuild this row via full render of list only when needed
-      // Full list rebuild is OK at low param counts; avoid every-50ms because host is event-driven.
-      renderParams();
-    } else {
-      renderParams();
-    }
+    if (!paramQuery && updateParamRow(p)) return;
+    renderParams();
   }
 
   document.getElementById('params-search').addEventListener('input', function (e) {

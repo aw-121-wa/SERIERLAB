@@ -220,10 +220,26 @@ body {
 
 .param-row {
   display: grid;
-  grid-template-columns: 1fr minmax(70px, 100px) auto;
+  grid-template-columns: 1fr minmax(70px, 100px) auto auto;
   gap: 4px;
   align-items: center;
   padding: 3px 2px 3px 10px;
+}
+
+.param-row .prefresh {
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 18px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 3px;
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #fff);
+  cursor: pointer;
+}
+
+.param-row .prefresh:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .param-row .pname {

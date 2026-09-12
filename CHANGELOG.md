@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.2.20
+
+- S12.1 审计修复：`parameters.update` 真正单行增量更新；每参数 ↻ Refresh（`parameter.refresh`）
+- Hardware Gate 发布包（含 S1–S12）
+
 ## 0.2.19
 
 - S12 Parameter Inspector：Workbench 右侧参数面板（path 分组、搜索、float/int/uint/bool、readonly）
