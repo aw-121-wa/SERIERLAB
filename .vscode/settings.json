@@ -84,7 +84,7 @@
             "id": "justfloat.ch12",
             "name": "ch12",
             "color": "#8b5cf6",
-            "visible": false
+            "visible": true
         },
         "justfloat.ch13": {
             "id": "justfloat.ch13",
