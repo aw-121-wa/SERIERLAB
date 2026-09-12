@@ -5,9 +5,16 @@
   "version": "0.1.0",
   "publisher": "local",
   "license": "MPL-2.0",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Other", "Debuggers"],
-  "activationEvents": ["onStartupFinished"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Debuggers"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -29,25 +36,54 @@
       ]
     },
     "commands": [
-      { "command": "serialLab.openWorkbench", "title": "Serial Lab: Open Workbench" },
-      { "command": "serialLab.refreshPorts", "title": "Serial Lab: Refresh Ports" },
-      { "command": "serialLab.connect", "title": "Serial Lab: Connect" },
-      { "command": "serialLab.disconnect", "title": "Serial Lab: Disconnect" },
-      { "command": "serialLab.exportSamples", "title": "Serial Lab: Export Samples CSV" },
-      { "command": "serialLab.exportRawLog", "title": "Serial Lab: Export Raw Log" }
+      {
+        "command": "serialLab.openWorkbench",
+        "title": "Serial Lab: Open Workbench"
+      },
+      {
+        "command": "serialLab.refreshPorts",
+        "title": "Serial Lab: Refresh Ports"
+      },
+      {
+        "command": "serialLab.connect",
+        "title": "Serial Lab: Connect"
+      },
+      {
+        "command": "serialLab.disconnect",
+        "title": "Serial Lab: Disconnect"
+      },
+      {
+        "command": "serialLab.exportSamples",
+        "title": "Serial Lab: Export Samples CSV"
+      },
+      {
+        "command": "serialLab.exportRawLog",
+        "title": "Serial Lab: Export Raw Log"
+      }
     ],
     "configuration": {
       "title": "Serial Lab",
       "properties": {
         "serialLab.connection": {
           "type": "object",
-          "default": { "path": "", "baudRate": 115200, "dataBits": 8, "parity": "none", "stopBits": 1 },
+          "default": {
+            "path": "",
+            "baudRate": 115200,
+            "dataBits": 8,
+            "parity": "none",
+            "stopBits": 1
+          },
           "description": "Last serial connection settings"
         },
         "serialLab.protocol": {
           "type": "string",
           "default": "justfloat",
-          "enum": ["justfloat", "firewater", "raw", "custom"],
+          "enum": [
+            "justfloat",
+            "firewater",
+            "raw",
+            "custom"
+          ],
           "description": "Active protocol id (custom uses serialLab.activeCustomProtocolId)"
         },
         "serialLab.activeCustomProtocolId": {
@@ -67,7 +103,11 @@
         },
         "serialLab.terminal": {
           "type": "object",
-          "default": { "rxEncoding": "text", "txEncoding": "text", "txLineEnding": "lf" },
+          "default": {
+            "rxEncoding": "text",
+            "txEncoding": "text",
+            "txLineEnding": "lf"
+          },
           "description": "Terminal encodings and TX line ending"
         },
         "serialLab.historySeconds": {
@@ -93,7 +133,8 @@
     "package": "vsce package"
   },
   "dependencies": {
-    "serialport": "^12.0.0"
+    "serialport": "^12.0.0",
+    "uplot": "^1.6.32"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
