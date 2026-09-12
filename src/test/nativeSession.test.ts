@@ -91,7 +91,10 @@ class FakeDevice {
         return;
       }
       let applied = r.value;
-      if (type === NativeParamType.Float32 && typeof applied === 'number' && applied > 20) applied = 20;
+      // Quantize float by step 0.1 (not range-clamp — host already enforces min/max).
+      if (type === NativeParamType.Float32 && typeof applied === 'number') {
+        applied = Math.round(applied * 10) / 10;
+      }
       p.value = applied;
       this.tx(NativeMessageType.ParamAck, NativeFrameFlags.Response, f.requestId, encodeParamValueMsg(id, p.type, applied));
     }
@@ -127,9 +130,9 @@ describe('NativeSession integration', () => {
     expect(session.getDeviceName()).toBe('FakeMCU');
 
     expect(await session.getParameterAsync(1)).toBe(3.5);
-    expect(await session.setParameter(1, 4.2)).toBeCloseTo(4.2, 5);
+    // Device quantizes by step 0.1 → ACK appliedValue 4.2
+    expect(await session.setParameter(1, 4.23)).toBeCloseTo(4.2, 5);
     expect(session.getParameterValue(1) as number).toBeCloseTo(4.2, 5);
-    expect(await session.setParameter(1, 25)).toBe(20);
 
     device.params.get(2)!.value = 0.55;
     device.unsolicitedValue(2);
@@ -171,5 +174,51 @@ describe('NativeSession integration', () => {
     device.params.get(1)!.writable = false;
     await expect(session.setParameter(1, 2)).rejects.toThrow(/ro/);
     expect(session.getParameterValue(1)).toBe(1);
+  });
+
+  it('discovery timeout when descriptors incomplete', async () => {
+    const device = new FakeDevice();
+    device.params.set(1, { path: 'a', type: NativeParamType.Int32, writable: true, value: 0 });
+    device.params.set(2, { path: 'b', type: NativeParamType.Int32, writable: true, value: 0 });
+    let descSeen = 0;
+    let send: (b: Uint8Array) => void = () => {};
+    const session = new NativeSession((b) => send(b));
+    device.bind((b) => {
+      const dec = new NativeFrameDecoder();
+      for (const f of dec.feed(b)) {
+        if (f.messageType === NativeMessageType.ParamDesc) {
+          descSeen += 1;
+          if (descSeen > 1) continue;
+        }
+        session.feed(encodeFrame({
+          messageType: f.messageType,
+          flags: f.flags,
+          requestId: f.requestId,
+          payload: f.payload,
+        }));
+      }
+    });
+    send = (b) => device.feedFromHost(b);
+    await session.startHandshake();
+    expect(session.getState()).toBe('discovering');
+    await new Promise((r) => setTimeout(r, 2100));
+    expect(session.getState()).toBe('discovery_failed');
+    expect(session.getDiscoveryError()).toMatch(/discovery timeout/);
+  });
+
+  it('unsolicited PARAM_VALUE with parameterId 0 is rejected', async () => {
+    const { session, device } = pair();
+    device.params.set(1, { path: 'a', type: NativeParamType.Int32, writable: true, value: 7 });
+    await session.startHandshake();
+    const before = session.metrics.decodeErrors;
+    session.feed(
+      encodeFrame({
+        messageType: NativeMessageType.ParamValue,
+        flags: NativeFrameFlags.Unsolicited,
+        requestId: 0,
+        payload: encodeParamValueMsg(0, NativeParamType.Int32, 1),
+      })
+    );
+    expect(session.metrics.decodeErrors).toBeGreaterThan(before);
   });
 });

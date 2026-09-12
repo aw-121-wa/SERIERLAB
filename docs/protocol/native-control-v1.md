@@ -129,7 +129,11 @@ After HELLO success, device sends `PARAM_DESC` per parameter:
 - flags.UNSOLICITED, requestId = 0  
 - count must match `HELLO.parameterCount`
 
+Host applies a **2000 ms discovery timeout** from HELLO success. Incomplete discovery → `discovery_failed` (never treat a partial table as ready).
+
 Disconnect clears host parameter registry; next connect re-runs HELLO + discovery.
+
+Unsolicited `PARAM_VALUE`: `frame.requestId = 0` and `frame.flags.UNSOLICITED`; **payload.parameterId must be 1..65535**. `parameterId = 0` is invalid → host decode error.
 
 ## 11. PARAM_DESC payload
 
@@ -160,10 +164,11 @@ Host: type MUST match descriptor or protocol error.
 ## 13. PARAM_SET / ACK / NACK
 
 **SET**: `uint16 parameterId, uint8 paramType, value`  
-Host validates exists/writable/type/range (UX only). Device MUST re-validate.
+Host MUST reject values outside descriptor min/max **before sending PARAM_SET**. Device MUST re-validate independently.  
+`ACK.appliedValue` MAY differ from requested (quantization / normalization / device dynamic constraint) and is the confirmed value — it is not a license to ignore public min/max.
 
 **ACK** (RESPONSE): `uint16 parameterId, uint8 paramType, appliedValue`  
-Host treats ACK value as confirmed (device may clamp/quantize).
+Host treats ACK value as confirmed.
 
 **NACK** (RESPONSE): `uint16 parameterId, uint8 errorCode, uint8 detailLength, bytes UTF-8`  
 `detailLength ≤ 127`

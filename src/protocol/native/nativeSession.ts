@@ -11,6 +11,7 @@ import {
 import { ParameterStore } from './parameterStore';
 import { NativeRequestManager } from './nativeRequestManager';
 import {
+  NATIVE_DISCOVERY_TIMEOUT_MS,
   NATIVE_VERSION,
   NativeFrame,
   NativeFrameFlags,
@@ -36,6 +37,7 @@ export type NativeSessionState =
   | 'discovering'
   | 'ready'
   | 'incompatible'
+  | 'discovery_failed'
   | 'disconnected';
 
 /**
@@ -48,6 +50,8 @@ export class NativeSession {
   private store = new ParameterStore();
   private state: NativeSessionState = 'idle';
   private expectedDescs = 0;
+  private discoveryTimer: ReturnType<typeof setTimeout> | undefined;
+  private discoveryError: string | null = null;
   private deviceName = '';
   private firmwareVersion = '';
   private deviceCapabilities = 0;
@@ -86,7 +90,31 @@ export class NativeSession {
     return this.firmwareVersion;
   }
 
+  getDiscoveryError(): string | null {
+    return this.discoveryError;
+  }
+
+  private clearDiscoveryTimer(): void {
+    if (this.discoveryTimer !== undefined) {
+      clearTimeout(this.discoveryTimer);
+      this.discoveryTimer = undefined;
+    }
+  }
+
+  private armDiscoveryTimeout(): void {
+    this.clearDiscoveryTimer();
+    this.discoveryError = null;
+    this.discoveryTimer = setTimeout(() => {
+      if (this.state === 'discovering') {
+        this.state = 'discovery_failed';
+        this.discoveryError = `discovery timeout: got ${this.store.count()}/${this.expectedDescs} descriptors`;
+      }
+    }, NATIVE_DISCOVERY_TIMEOUT_MS);
+  }
+
   reset(): void {
+    this.clearDiscoveryTimer();
+    this.discoveryError = null;
     this.decoder.reset();
     this.requests.rejectAll('reset');
     this.store.clear();
@@ -98,6 +126,7 @@ export class NativeSession {
   }
 
   disconnect(): void {
+    this.clearDiscoveryTimer();
     this.requests.rejectAll('disconnected');
     this.store.clear();
     this.decoder.reset();
@@ -165,7 +194,13 @@ export class NativeSession {
         this.firmwareVersion = hello.firmwareVersion;
         this.deviceCapabilities = hello.deviceCapabilities;
         this.expectedDescs = hello.parameterCount;
-        this.state = hello.parameterCount === 0 ? 'ready' : 'discovering';
+        if (hello.parameterCount === 0) {
+          this.clearDiscoveryTimer();
+          this.state = 'ready';
+        } else {
+          this.state = 'discovering';
+          this.armDiscoveryTimeout();
+        }
       }
     }
     if (isResponse && frame.requestId !== 0) {
@@ -182,7 +217,16 @@ export class NativeSession {
     }
     if (frame.messageType === NativeMessageType.ParamValue && isUnsol) {
       const v = decodeParamValueMsg(frame.payload);
-      if (v) this.store.applyValue(v.id, v.value);
+      if (!v) {
+        this.metrics.decodeErrors += 1;
+        return;
+      }
+      // Unsolicited: frame.requestId===0; payload.parameterId must still be 1..65535.
+      if (v.id === 0) {
+        this.metrics.decodeErrors += 1;
+        return;
+      }
+      this.store.applyValue(v.id, v.value);
       return;
     }
   }
@@ -190,7 +234,11 @@ export class NativeSession {
   private afterResponseFrame(frame: NativeFrame): void {
     if (frame.messageType === NativeMessageType.ParamValue) {
       const v = decodeParamValueMsg(frame.payload);
-      if (v) this.store.applyValue(v.id, v.value);
+      if (!v || v.id === 0) {
+        this.metrics.decodeErrors += 1;
+        return;
+      }
+      this.store.applyValue(v.id, v.value);
       return;
     }
     if (frame.messageType === NativeMessageType.ParamAck) {
@@ -221,6 +269,8 @@ export class NativeSession {
       return;
     }
     if (this.state === 'discovering' && this.store.count() >= this.expectedDescs) {
+      this.clearDiscoveryTimer();
+      this.discoveryError = null;
       this.state = 'ready';
     }
   }
