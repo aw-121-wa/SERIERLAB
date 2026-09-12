@@ -96,9 +96,12 @@
     if (msg.type === 'samples') rebuildSeries(msg.series);
     if (msg.type === 'raw') appendTerm(msg.entries);
     if (msg.type === 'status') {
+      var drop = msg.droppedUiEntries
+        ? ' · dropUI ' + msg.droppedUiEntries
+        : '';
       document.getElementById('status').textContent =
         msg.state + ' · ' + msg.path + ' · ' + msg.protocol +
-        ' · RX ' + msg.rxBytes + ' · TX ' + msg.txBytes + ' · err ' + msg.errors;
+        ' · RX ' + msg.rxBytes + ' · TX ' + msg.txBytes + ' · err ' + msg.errors + drop;
     }
     if (msg.type === 'cleared') document.getElementById('term').innerHTML = '';
   });

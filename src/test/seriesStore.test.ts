@@ -19,4 +19,24 @@ describe('SeriesStore', () => {
     expect(w[0]!.ys[w[0]!.ys.length - 1]).toBe(2);
     expect(w[0]!.ys.length).toBe(1);
   });
+
+  it('exportCsv uses toIso for wall clock and keeps t_ms session-relative', () => {
+    const s = new SeriesStore(60_000, 1000);
+    s.append(0, [1], ['p.a']);
+    s.append(3215, [2], ['p.a']);
+    const epoch = Date.UTC(2026, 0, 1, 0, 0, 0);
+    const csv = s.exportCsv(undefined, (t) => new Date(epoch + t).toISOString());
+    const lines = csv.split('\n');
+    expect(lines[0]).toContain('t_ms');
+    expect(lines[1]).toBe(`0,${new Date(epoch).toISOString()},1`);
+    expect(lines[2]).toBe(`3215,${new Date(epoch + 3215).toISOString()},2`);
+    expect(csv).not.toContain('1970-01-01');
+  });
+
+  it('exportCsv leaves iso_time empty without toIso', () => {
+    const s = new SeriesStore(60_000, 1000);
+    s.append(3215, [1], ['p.a']);
+    const csv = s.exportCsv();
+    expect(csv.split('\n')[1]).toBe('3215,,1');
+  });
 });

@@ -72,14 +72,19 @@ export class SeriesStore {
     return out;
   }
 
-  exportCsv(aliasMap?: Map<string, string>): string {
+  /**
+   * @param aliasMap optional display-name override per channel id
+   * @param toIso maps session-relative t_ms → wall-clock ISO; omit to leave iso_time empty
+   *   (never pass session-relative ms into `new Date` — that yields 1970).
+   */
+  exportCsv(aliasMap?: Map<string, string>, toIso?: (tMs: number) => string): string {
     const ids = [...this.meta.keys()];
     const headers = ['t_ms', 'iso_time', ...ids.map((id) => aliasMap?.get(id) ?? this.meta.get(id)!.name)];
     const maxLen = Math.max(0, ...ids.map((id) => (this.xs.get(id) ?? []).length));
     const lines: string[] = [headers.join(',')];
     for (let i = 0; i < maxLen; i++) {
       const t = this.xs.get(ids[0] ?? '')?.[i];
-      const iso = t !== undefined ? new Date(t).toISOString() : '';
+      const iso = t !== undefined && toIso ? toIso(t) : '';
       const row = [String(t ?? ''), iso];
       for (const id of ids) {
         const v = this.ys.get(id)?.[i];

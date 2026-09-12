@@ -125,6 +125,18 @@
           "type": "number",
           "default": 2097152,
           "minimum": 65536
+        },
+        "serialLab.uiPendingMaxBytes": {
+          "type": "number",
+          "default": 524288,
+          "minimum": 4096,
+          "description": "Max bytes buffered for UI terminal flush (drop oldest). Pause does not stop serial decode."
+        },
+        "serialLab.uiPendingMaxEntries": {
+          "type": "number",
+          "default": 4000,
+          "minimum": 64,
+          "description": "Max UI pending entries (drop oldest when exceeded)."
         }
       }
     }

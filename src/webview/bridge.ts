@@ -14,6 +14,8 @@ export type HostToWebview =
       txBytes: number;
       errors: number;
       channels: { id: string; name: string; color: string; visible: boolean }[];
+      droppedUiEntries?: number;
+      droppedUiBytes?: number;
     }
   | { type: 'cleared' };
 

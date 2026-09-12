@@ -4,6 +4,8 @@ import { ProtocolRouter } from './protocol/router';
 import { RawBuffer } from './store/rawBuffer';
 import { SeriesStore } from './store/seriesStore';
 import { ChannelRegistry } from './store/channels';
+import { PendingUiQueue } from './store/pendingUiQueue';
+import { SessionClock } from './time/sessionClock';
 import * as state from './state/workspaceState';
 import { decodeHex, encodeHex } from './protocol/hex';
 import { log } from './log';
@@ -18,18 +20,23 @@ export class AppController implements vscode.Disposable {
   readonly raw: RawBuffer;
   readonly series: SeriesStore;
   readonly channels = new ChannelRegistry();
+  readonly clock = new SessionClock();
   private customConfig: CustomProtocolConfig | undefined;
-  private pendingRaw: { tMs: number; dir: 'RX' | 'TX'; bytes: Uint8Array }[] = [];
+  private readonly pendingUi: PendingUiQueue;
   private paused = false;
   private rxEncoding: 'text' | 'hex' = 'text';
   private timer: NodeJS.Timeout | undefined;
-  private sessionT0 = Date.now();
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.raw = new RawBuffer(vscode.workspace.getConfiguration('serialLab').get<number>('rawBufferBytes') ?? 2 * 1024 * 1024);
     this.series = new SeriesStore(
       (vscode.workspace.getConfiguration('serialLab').get<number>('historySeconds') ?? 60) * 1000
     );
+    const uiCfg = vscode.workspace.getConfiguration('serialLab');
+    this.pendingUi = new PendingUiQueue({
+      maxBytes: uiCfg.get<number>('uiPendingMaxBytes') ?? 512 * 1024,
+      maxEntries: uiCfg.get<number>('uiPendingMaxEntries') ?? 4000,
+    });
     this.channels.applySaved(state.loadChannelPrefs());
     this.applyProtocolFromState();
     this.serial.on('data', (bytes: Uint8Array) => this.onRx(bytes));
@@ -38,7 +45,7 @@ export class AppController implements vscode.Disposable {
   }
 
   private nowMs(): number {
-    return Date.now() - this.sessionT0;
+    return this.clock.now();
   }
 
   private applyProtocolFromState(): void {
@@ -68,7 +75,7 @@ export class AppController implements vscode.Disposable {
   private onRx(bytes: Uint8Array): void {
     const t = this.nowMs();
     this.raw.push(bytes, 'RX', t);
-    this.pendingRaw.push({ tMs: t, dir: 'RX', bytes });
+    this.pendingUi.push(t, 'RX', bytes);
     if (this.router.protocolKind === 'raw') return;
     const batches = this.router.feed(bytes, t);
     for (const b of batches) {
@@ -90,6 +97,11 @@ export class AppController implements vscode.Disposable {
         break;
       case 'pause':
         this.paused = msg.paused;
+        if (!msg.paused) {
+          // Resume: do not replay the entire pause backlog into the terminal.
+          this.pendingUi.trimForResume();
+          this.pushStatus();
+        }
         break;
       case 'toggleChannel': {
         this.channels.setVisible(msg.id, msg.visible);
@@ -105,6 +117,7 @@ export class AppController implements vscode.Disposable {
         break;
       case 'clearTerminal':
         this.raw.clear();
+        this.pendingUi.clear();
         this.post({ type: 'cleared' });
         break;
       case 'clearWaveform':
@@ -129,7 +142,7 @@ export class AppController implements vscode.Disposable {
       await this.serial.write(bytes);
       const t = this.nowMs();
       this.raw.push(bytes, 'TX', t);
-      this.pendingRaw.push({ tMs: t, dir: 'TX', bytes });
+      this.pendingUi.push(t, 'TX', bytes);
       this.pushStatus();
     } catch (e) {
       void vscode.window.showErrorMessage(`Serial Lab send failed: ${(e as Error).message}`);
@@ -155,11 +168,13 @@ export class AppController implements vscode.Disposable {
   }
 
   exportSamples(uri: vscode.Uri): void {
-    void vscode.workspace.fs.writeFile(uri, Buffer.from(this.series.exportCsv(), 'utf8'));
+    const toIso = (tMs: number) => this.clock.toIso(tMs);
+    void vscode.workspace.fs.writeFile(uri, Buffer.from(this.series.exportCsv(undefined, toIso), 'utf8'));
   }
 
   exportRaw(uri: vscode.Uri): void {
-    const text = formatRawLog(this.raw.entries());
+    const toIso = (tMs: number) => this.clock.toIso(tMs);
+    const text = formatRawLog(this.raw.entries(), toIso);
     void vscode.workspace.fs.writeFile(uri, Buffer.from(text, 'utf8'));
   }
 
@@ -177,13 +192,14 @@ export class AppController implements vscode.Disposable {
       txBytes: this.serial.txBytes,
       errors: this.router.errors,
       channels: this.channels.list(),
+      droppedUiEntries: this.pendingUi.droppedEntryCount,
+      droppedUiBytes: this.pendingUi.droppedByteCount,
     });
   }
 
   private flushUi(): void {
     if (this.paused) return;
-    const raw = this.pendingRaw;
-    this.pendingRaw = [];
+    const raw = this.pendingUi.drain();
     if (raw.length) {
       this.post({
         type: 'raw',
