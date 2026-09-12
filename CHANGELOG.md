@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.2.28
+
+- S14.2.1 RuntimeSymbol identity：`sha256::scope::expression`（global / file-static CU）
+- SWD Channel ID：`swd.<elfPrefix>.global.*` 或 `swd.<elfPrefix>.<scopeHash8>.*`
+- 同 ELF 下 motor.c / imu.c 同名 static 不再串 Hover 缓存与 Plot 通道
+- Python inspect 输出 `sourceFile` / `kind`（无 DW_AT_external → file-static）
+
 ## 0.2.27
 
 - S14.1.1：拒绝把 `ptr->x` / `foo()` / `motors[i]` 切成伪全局符号

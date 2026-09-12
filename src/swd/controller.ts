@@ -5,6 +5,7 @@ import { resolvePython } from './runtime';
 import { ParameterView } from '../protocol/native/parameterView';
 import { firmwareIdentityFromPath, swdChannelId } from './runtimeChannels';
 import { DwarfSymbolRecord } from '../runtime/runtimeSymbolService';
+import { normalizeSourceScope } from '../runtime/runtimeSymbolIdentity';
 
 export type SwdPlotPush = {
   channelId: string;
@@ -117,7 +118,7 @@ export class SwdController implements vscode.Disposable {
       const client = this.makeClient(python);
       this.client = client;
       const result = await client.request<{
-        parameters: (ParameterView & { address?: number; size?: number })[];
+        parameters: (ParameterView & { address?: number; size?: number; sourceFile?: string })[];
         verifiedBytes: number;
       }>('connect', cfg.args);
       if (generation !== this.generation) return;
@@ -133,6 +134,7 @@ export class SwdController implements vscode.Disposable {
           type: p.type,
           size: p.type === 'bool' ? 1 : 4,
           writable: p.writable,
+          sourceFile: p.sourceFile,
         }));
       this.state = 'ready'; this.detail = `SWD · 已核对 ${result.verifiedBytes} 字节 Flash`;
       this.changed();
@@ -160,8 +162,13 @@ export class SwdController implements vscode.Disposable {
           p.confirmedValue = value;
           this.changed(p);
           if (this.elfSha256 && value !== undefined) {
+            const rec = this.symbolRecords.find((s) => s.path === p.path);
             plot.push({
-              channelId: swdChannelId(this.elfSha256, p.path),
+              channelId: swdChannelId(
+                this.elfSha256,
+                p.path,
+                normalizeSourceScope(rec?.sourceFile)
+              ),
               path: p.path,
               type: p.type,
               value,

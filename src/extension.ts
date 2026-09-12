@@ -25,8 +25,8 @@ export function activate(context: vscode.ExtensionContext): void {
           get firmwareSha256() {
             return controller?.getHoverRuntimeSource().firmwareSha256 ?? '';
           },
-          isWatched: (e) => !!controller?.getHoverRuntimeSource().isWatched(e),
-          lookupValue: (e) => controller?.getHoverRuntimeSource().lookupValue(e),
+          isWatched: (sym) => !!controller?.getHoverRuntimeSource().isWatched(sym),
+          lookupValue: (sym) => controller?.getHoverRuntimeSource().lookupValue(sym),
         }
       )
     )

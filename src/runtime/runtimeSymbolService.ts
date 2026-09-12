@@ -1,5 +1,6 @@
 import { expressionAtOffset, splitExpression } from './sourceExpression';
 import { firmwareIdentityFromBytes, FirmwareIdentity } from '../swd/runtimeChannels';
+import { normalizeSourceScope } from './runtimeSymbolIdentity';
 
 export type RuntimeValueType = 'float32' | 'int32' | 'uint32' | 'bool';
 
@@ -19,6 +20,8 @@ export type RuntimeSymbol = {
   expression: string;
   rootName: string;
   kind: RuntimeSymbolKind;
+  /** Compile-unit / source scope identity ('global' or normalized file). */
+  scope: string;
   type: RuntimeValueType;
   byteSize: number;
   address: number;
@@ -99,15 +102,29 @@ export class RuntimeSymbolService {
     }
     const matches = this.byPath.get(text) ?? [];
     if (matches.length === 0) return { ok: false, reason: 'symbol-not-found', detail: text };
-    if (matches.length > 1) {
-      // Prefer unique; without sourceFile metadata, duplicates are ambiguous.
-      return { ok: false, reason: 'ambiguous-symbol', detail: `${matches.length} matches for ${text}` };
+
+    const scope = normalizeSourceScope(sourceFile);
+    let rec: DwarfSymbolRecord | undefined;
+    if (matches.length === 1) {
+      rec = matches[0];
+    } else {
+      // Prefer exact compile-unit match for file-static disambiguation.
+      const scoped = matches.filter((m) => normalizeSourceScope(m.sourceFile) === scope);
+      if (scoped.length === 1) rec = scoped[0];
+      else if (scoped.length > 1) {
+        return { ok: false, reason: 'ambiguous-symbol', detail: `${scoped.length} matches in ${scope}` };
+      } else {
+        // Fall back to unscoped unique; if still many, ambiguous.
+        const unscoped = matches.filter((m) => !m.sourceFile);
+        if (unscoped.length === 1) rec = unscoped[0];
+        else return { ok: false, reason: 'ambiguous-symbol', detail: `${matches.length} matches for ${text}` };
+      }
     }
-    const rec = matches[0]!;
+    if (!rec) return { ok: false, reason: 'symbol-not-found', detail: text };
+
     if (rec.type !== 'float32' && rec.type !== 'int32' && rec.type !== 'uint32' && rec.type !== 'bool') {
       return { ok: false, reason: 'unsupported-type', detail: String(rec.type) };
     }
-    // Backend only emits DW_OP_addr globals already in writable storage.
     if (!rec.writable) {
       return { ok: false, reason: 'not-in-ram', detail: text };
     }
@@ -117,6 +134,8 @@ export class RuntimeSymbolService {
         return { ok: false, reason: 'not-in-ram', detail: text };
       }
     }
+    const kind: RuntimeSymbolKind = rec.sourceFile ? 'file-static' : 'global';
+    const symScope = normalizeSourceScope(rec.sourceFile ?? sourceFile);
     const root = text.split(/[.[]/)[0]!;
     const rootRec = (this.byPath.get(root) ?? [])[0];
     const rootAddress = rootRec?.address ?? rec.address;
@@ -125,7 +144,8 @@ export class RuntimeSymbolService {
       symbol: {
         expression: text,
         rootName: root,
-        kind: 'global',
+        kind,
+        scope: symScope,
         type: rec.type,
         byteSize: rec.size,
         address: rec.address,

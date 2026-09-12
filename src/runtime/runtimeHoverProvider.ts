@@ -26,8 +26,8 @@ export class RuntimeHoverProvider implements vscode.HoverProvider {
     const symbol = resolution.symbol;
     if (!service.isCurrent(symbol)) return undefined;
 
-    const watched = this.runtime.isWatched(symbol.expression);
-    const cached = watched ? this.runtime.lookupValue(symbol.expression) : undefined;
+    const watched = this.runtime.isWatched(symbol);
+    const cached = watched ? this.runtime.lookupValue(symbol) : undefined;
 
     const md = buildRuntimeHoverMarkdown({
       expression: symbol.expression,

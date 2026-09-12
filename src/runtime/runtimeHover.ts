@@ -5,12 +5,18 @@ export type HoverCacheEntry = {
   updatedAtMs?: number;
 };
 
+export type HoverRuntimeSymbolRef = {
+  expression: string;
+  scope: string;
+  firmware: { sha256: string };
+};
+
 export type HoverRuntimeSource = {
   /** Current firmware content SHA (empty = no SWD session). */
   firmwareSha256: string;
-  /** Cached watch/plot value keyed by SWD channel id (elf prefix + path). */
-  lookupValue(expression: string): HoverCacheEntry | undefined;
-  isWatched(expression: string): boolean;
+  /** Lookup by full RuntimeSymbol identity (firmware + scope + expression). */
+  lookupValue(symbol: HoverRuntimeSymbolRef): HoverCacheEntry | undefined;
+  isWatched(symbol: HoverRuntimeSymbolRef): boolean;
 };
 
 export function formatAddress32(addr: number): string {

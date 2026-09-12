@@ -22,9 +22,13 @@ export function firmwareIdentityFromPath(elfPath: string): FirmwareIdentity {
   return firmwareIdentityFromBytes(readFileSync(elfPath));
 }
 
-/** Stable SWD channel id: firmware content id + semantic path (never bare address). */
-export function swdChannelId(firmwareSha256: string, expression: string): string {
-  return `swd.${firmwareSha256.slice(0, 16)}.${expression}`;
+/** Stable SWD channel id (legacy v1 — global-only). Prefer swdChannelIdFromSymbol. */
+export function swdChannelId(firmwareSha256: string, expression: string, scope = 'global'): string {
+  if (scope === 'global' || !scope) {
+    return `swd.${firmwareSha256.slice(0, 16)}.global.${expression}`;
+  }
+  const scopePart = createHash('sha256').update(scope).digest('hex').slice(0, 8);
+  return `swd.${firmwareSha256.slice(0, 16)}.${scopePart}.${expression}`;
 }
 
 export type SwdPlotSample = {

@@ -98,14 +98,14 @@ def load_elf(filename):
                 return byte_size(die.get_DIE_from_attribute('DW_AT_type'), depth + 1)
             return None
 
-        def expand(die, path, address, readonly=False, depth=0):
+        def expand(die, path, address, readonly=False, depth=0, source_file=None):
             if die is None or depth > 12 or len(result) > 20000:
                 return
             tag = die.tag
             if tag in ('DW_TAG_typedef', 'DW_TAG_volatile_type', 'DW_TAG_const_type', 'DW_TAG_restrict_type'):
                 if 'DW_AT_type' in die.attributes:
                     expand(die.get_DIE_from_attribute('DW_AT_type'), path, address,
-                           readonly or tag == 'DW_TAG_const_type', depth + 1)
+                           readonly or tag == 'DW_TAG_const_type', depth + 1, source_file)
                 return
             if tag == 'DW_TAG_structure_type':
                 for member in die.iter_children():
@@ -116,7 +116,7 @@ def load_elf(filename):
                         continue
                     if name(member) and 'DW_AT_type' in member.attributes:
                         expand(member.get_DIE_from_attribute('DW_AT_type'), path + '.' + name(member),
-                               address + loc.value, readonly, depth + 1)
+                               address + loc.value, readonly, depth + 1, source_file)
                 return
             if tag == 'DW_TAG_array_type' and 'DW_AT_type' in die.attributes:
                 ranges = [r for r in die.iter_children() if r.tag == 'DW_TAG_subrange_type']
@@ -133,7 +133,7 @@ def load_elf(filename):
                 stride = byte_size(element)
                 if stride and isinstance(length, int) and 0 < length <= 256:
                     for i in range(length):
-                        expand(element, f'{path}[{i}]', address + i * stride, readonly, depth + 1)
+                        expand(element, f'{path}[{i}]', address + i * stride, readonly, depth + 1, source_file)
                 return
             # Pointers, unions and location lists are deliberately unsupported.
             if tag != 'DW_TAG_base_type' or readonly:
@@ -150,9 +150,18 @@ def load_elf(filename):
             key = (path, address)
             if storage is not None and key not in seen:
                 seen.add(key)
-                result.append(dict(path=path, address=address, type=kind, size=size.value, writable=True))
+                item = dict(path=path, address=address, type=kind, size=size.value, writable=True)
+                if source_file:
+                    item['sourceFile'] = source_file
+                    item['kind'] = 'file-static'
+                else:
+                    item['kind'] = 'global'
+                result.append(item)
 
         for cu in dwarf.iter_CUs():
+            top = cu.get_top_DIE()
+            cu_name_attr = top.attributes.get('DW_AT_name')
+            cu_file = str(cu_name_attr.value) if cu_name_attr else None
             for die in cu.iter_DIEs():
                 if die.tag != 'DW_TAG_variable':
                     continue
@@ -166,7 +175,10 @@ def load_elf(filename):
                     continue
                 ops = parser.parse_expr(loc.value)
                 if len(ops) == 1 and ops[0].op_name == 'DW_OP_addr':
-                    expand(typed.get_DIE_from_attribute('DW_AT_type'), variable_name, ops[0].args[0])
+                    # File-static (no DW_AT_external) keeps compile-unit scope for identity.
+                    external = 'DW_AT_external' in die.attributes or 'DW_AT_external' in typed.attributes
+                    src = None if external else cu_file
+                    expand(typed.get_DIE_from_attribute('DW_AT_type'), variable_name, ops[0].args[0], False, 0, src)
         # Use load addresses: also check initial .data bytes stored in Flash.
         # Debug information and NOBITS (.bss) have no physical bytes to compare.
         immutable = [(segment['p_paddr'], segment.data()) for segment in elf.iter_segments()

@@ -27,6 +27,7 @@ import {
 import { SwdController, SwdPlotPush } from './swd/controller';
 import { RuntimeSymbolService } from './runtime/runtimeSymbolService';
 import { HoverRuntimeSource } from './runtime/runtimeHover';
+import { normalizeSourceScope } from './runtime/runtimeSymbolIdentity';
 import { ProjectConfigService, ProjectConfigSnapshot } from './config/projectConfigService';
 
 export class AppController implements vscode.Disposable {
@@ -199,10 +200,23 @@ export class AppController implements vscode.Disposable {
   getHoverRuntimeSource(): HoverRuntimeSource {
     return {
       firmwareSha256: this.swd.elfSha256,
-      isWatched: (expression) => this.swd.parameters.some((p) => p.path === expression),
-      lookupValue: (expression) => {
-        const p = this.swd.parameters.find((x) => x.path === expression);
-        if (!p || p.confirmedValue === undefined) return undefined;
+      isWatched: (sym) =>
+        this.swd.parameters.some(
+          (p) => p.path === sym.expression
+        ) && this.swd.symbolRecords.some(
+          (s) =>
+            s.path === sym.expression &&
+            (s.sourceFile ? normalizeSourceScope(s.sourceFile) : 'global') === sym.scope
+        ),
+      lookupValue: (sym) => {
+        const p = this.swd.parameters.find((x) => x.path === sym.expression);
+        const rec = this.swd.symbolRecords.find(
+          (s) =>
+            s.path === sym.expression &&
+            (s.sourceFile ? normalizeSourceScope(s.sourceFile) : 'global') === sym.scope
+        );
+        if (!rec || !p || p.confirmedValue === undefined) return undefined;
+        if (this.swd.elfSha256 !== sym.firmware.sha256) return undefined;
         return { value: p.confirmedValue };
       },
     };
