@@ -1,28 +1,112 @@
-# Serial Lab
+﻿# Serial Lab
 
-**0.2.32：新增连接向导、实际配置与诊断报告、Windows SWD 离线环境导入/导出。** 保留 Native 串口和 SWD / DAPLink 运行态 RAM 调参，芯片由用户选择，不从 ELF 自动识别。
+**在 VS Code 中查看串口波形、收发数据，调整 STM32 运行中的 RAM 参数。**
 
-首次安装请阅读 [使用说明](使用说明.md)，包括 VSIX 安装、环境准备、接线、工程要求及调参步骤。详细技术说明见 [SWD.md](SWD.md)。
+将多通道波形、文本/HEX 终端和参数面板放在编辑器旁边，支持普通串口调试、Native 协议调参，以及通过 SWD 调试探针直接读写 RAM 变量。
 
-VSCode 串口调试工作台：连接本机串口，解析 JustFloat / FireWater / RawData 与自定义协议，实时波形、文本/HEX 终端、指令发送、采样与原始日志导出。
+**Keil、STM32CubeIDE 用户也能使用，无需学习 CMake。** 普通用户不需要下载插件源码、安装 Node.js 或运行 npm 命令。
 
-面向 STM32 / 嵌入式日常调试，可在编辑器内与代码并排使用，减少切到独立上位机的成本。
+## 选择适合你的连接方式
+
+| 想做什么 | 使用方式 | 需要准备 |
+| --- | --- | --- |
+| 收发串口数据、查看波形 | 串口连接，支持 CH340 等系统串口设备 | 驱动、正确接线、匹配的波特率和协议 |
+| 通过固件协议调整参数 | Native 串口调参 | 固件接入对应 Native SDK/协议 |
+| 不添加上位机通信代码，调整 RAM 参数 | SWD / DAPLink 调参 | 调试探针、运行中的固件、配套 ELF/AXF |
+
+CH340 USB 转 TTL 用于串口收发，不能替代 SWD 调试探针。串口与 SWD 连接独立，可以按需使用。
+
+## 第一次使用
+
+1. 安装扩展，打开左侧 **Serial Lab** 侧栏。
+2. 点击 **首次连接向导**，选择 **Serial / UART** 或 **SWD**。
+3. 串口模式：选择端口、波特率和数据协议，连接后打开波形面板。
+4. SWD 模式：准备环境、选择探针、手动选择芯片，再选择匹配的 ELF/AXF 和 RAM 变量。
+
+通过命令面板运行 **Serial Lab: Open Workbench** 也可以打开工作台。不确定固件发送格式时，可先用 **RawData** 查看原始数据；显示波形需要匹配的数据协议。
+
+需要 VS Code 1.90 或更新版本。SWD 需要受信任的工作区。安装、接线和完整操作步骤见 [使用说明](使用说明.md)。
+
+## 不需要更换开发工具
+
+继续使用原来的 IDE 编译和烧录，再将产物交给 Serial Lab：
+
+| 开发工具 | 在插件中选择 | 关键要求 |
+| --- | --- | --- |
+| Keil MDK / µVision | `.axf` | 启用 Debug Information，产物需包含支持的 ELF/DWARF 信息 |
+| STM32CubeIDE | `.elf` | 保留调试信息，选择与本次烧录一致的产物 |
+| CMake + ARM GCC | `.elf` | 使用工程现有预设或脚本，保留 `-g` / `-g3` |
+
+无需转换工程，也不需要专门创建名为 Release-SWD 的配置。HEX/BIN 不能代替变量解析所需的 ELF/AXF。
+
+菜单位置、文件查找和操作步骤见 [Keil / CubeIDE / CMake 工程准备指南](工程准备指南.md)。
 
 ## 功能
 
-- 选择本机串口，默认 **115200 8N1**
-- 内置协议：
-  - **JustFloat**：小端 `float32` 序列 + 尾标 `00 00 80 7F`
-  - **FireWater**：文本浮点行（逗号或空白分隔，`\n` 结束）
-  - **RawData**：不解码，仅终端显示
-- **自定义协议**（workspace 配置 `serialLab.protocols`）
-- 多通道 uPlot 波形、暂停、通道显隐
-- 终端 **文本 / HEX** 显示切换；发送 **文本 / HEX** + 行尾（none/LF/CR/CRLF）
-- 导出采样 CSV 与原始 RX/TX 日志
+- **多通道波形**：连续曲线、缩放、跟随、暂停和通道显隐。
+- **串口终端**：文本/HEX 收发，可选择发送行尾。
+- **协议解析**：JustFloat、FireWater、RawData、Native 和自定义协议。
+- **运行态调参**：选择 RAM 变量，设置写入范围，写入后读回核对。
+- **源码操作**：连接 SWD 后，在 C/C++ 中右键 Watch、Add to Plot、Edit；成员声明可选择完整实例路径。
+- **配置与诊断**：查看实际配置和待重连配置，复制诊断报告。
+- **数据导出**：采样 CSV 和原始收发日志。
 
-## 快速开始
+### 串口数据格式
 
-### 开发运行
+| 协议 | 固件输出格式 |
+| --- | --- |
+| JustFloat | 小端 float32 序列，帧尾 `00 00 80 7F` |
+| FireWater | 换行结束的文本数值，数值间用逗号或空格分隔 |
+| RawData | 原始字节，仅终端显示，不解析波形 |
+| Native | 对应的设备发现、参数及数据协议 |
+
+自定义分隔符、通道和脚本解析见 [自定义协议说明](CUSTOM_PROTOCOLS.md)。
+
+## 环境准备与离线使用
+
+默认无需手动安装或激活 Python。首次使用 SWD 时，插件可按提示下载独立环境；后续启动会后台预检已有环境。也可以指定自己的 Python 解释器。
+
+首次在线安装需要下载站点可达。无网络电脑可导入 **Windows 同架构离线环境包**，其中包含 Python、依赖和导出时已安装的芯片支持包。USB 驱动需单独准备。详见 [离线环境说明](SWD_OFFLINE.md)。
+
+## 调参前需要了解
+
+- 芯片型号由用户选择，不从 ELF 自动推断。
+- ELF/AXF 必须与已烧录固件一致；重新编译并烧录后，应选择对应产物。
+- 参数需要有固定可写 RAM 地址，算法应持续读取。推荐使用实际参与运算的 `volatile` 全局变量或结构体成员。
+- 宏、常量、被优化掉的变量、临时局部变量等不属于当前支持范围。
+- 启用 D-Cache 的工程需要处理缓存一致性，单加 `volatile` 不够。
+- RAM 修改通常在复位后恢复初始值；插件不自动保存到 Flash，也不负责烧录或使能执行机构。
+
+具体类型、数量限制和缓存说明见 [SWD 技术说明](SWD.md)。不同电脑、编译器输出和开发板组合仍需实机验证。
+
+## 遇到问题
+
+查看工作台的 **实际连接配置与诊断**，需要反馈时点击 **复制诊断报告**。
+
+| 现象 | 优先检查 |
+| --- | --- |
+| 没有串口 | USB 连接、驱动、刷新端口列表 |
+| 串口打不开 | 是否被其他软件占用，查看具体错误 |
+| 已连接但 RX 为 0 | 固件发送、接线、端口选择 |
+| 收到字节但没有波形 | 波特率、协议和帧格式；RawData 不生成波形 |
+| 实际波特率与界面选择不同 | `.seriallab.json` 的配置优先，查看来源并重连 |
+| SWD 环境或芯片支持缺失 | 使用连接向导，或导入包含该型号的离线环境 |
+| 源码变量无法解析 | 先连接 SWD，选择完整表达式或列表中的实例 |
+
+反馈时请说明插件版本、芯片、探针/串口设备和复现步骤。诊断报告包含本机路径及探针 ID，可在分享前删除不必要的信息。
+
+## 文档
+
+- [完整使用说明](使用说明.md)
+- [Keil / STM32CubeIDE / CMake 工程准备](工程准备指南.md)
+- [SWD 技术说明](SWD.md)
+- [离线环境迁移](SWD_OFFLINE.md)
+- [自定义串口协议](CUSTOM_PROTOCOLS.md)
+- [更新日志](CHANGELOG.md)
+
+## 参与开发
+
+以下命令只用于开发插件，普通用户无需执行：
 
 ```powershell
 npm install
@@ -30,117 +114,6 @@ npm run compile
 npm test
 ```
 
-在 VSCode 中打开本目录，按 **F5** 启动 Extension Development Host。
+在 VS Code 中打开插件源码，按 F5 启动扩展开发宿主。`npm run package` 生成 VSIX 安装包。
 
-### 日常使用
-
-1. 打开左侧 Activity Bar 的 **Serial Lab** 侧栏  
-2. **刷新** 端口，选择设备（如 `COM3`）  
-3. 确认波特率（默认 115200），点击 **连接**  
-4. 选择协议：JustFloat / FireWater / RawData / Custom  
-5. 命令面板执行 **Serial Lab: Open Workbench** 打开波形与终端  
-6. 需要时 **Serial Lab: Export Samples CSV** 或 **Export Raw Log**
-
-> 同一串口同一时间只能被一个程序占用。若 VOFA+ 或串口助手已打开 COM 口，请先断开。
-
-## 自定义协议
-
-侧栏协议选 **Custom…** → **编辑自定义协议**，在打开的 JSON 中维护数组。改完后把 `serialLab.protocol` 设为 `custom`，并用 `serialLab.activeCustomProtocolId` 指定当前项（侧栏切换协议时也会写入）。
-
-### 配置型（无代码）
-
-```json
-[
-  {
-    "id": "stm32-csv",
-    "name": "STM32 CSV",
-    "mode": "config",
-    "delimiter": "comma",
-    "skipPrefix": "DATA,",
-    "channels": [
-      { "index": 0, "name": "ax" },
-      { "index": 1, "name": "ay" },
-      { "index": 2, "name": "az" }
-    ]
-  }
-]
-```
-
-字段说明：
-
-| 字段 | 含义 |
-|------|------|
-| `delimiter` | `comma` / `space` / `tab` / `semicolon` 或任意分隔字符串 |
-| `skipPrefix` | 可选行前缀（不匹配则忽略该行） |
-| `channels[].index` | 字段下标（0-based） |
-| `channels[].name` | 通道显示名 |
-
-### 脚本型
-
-对「一行文本」返回 `number[]` 或 `null`：
-
-```json
-[
-  {
-    "id": "tagged",
-    "name": "Tagged",
-    "mode": "script",
-    "script": "return line.split(';').slice(1).map(Number).filter(Number.isFinite);"
-  }
-]
-```
-
-脚本在扩展宿主中受限执行，异常或超过软上限（约 50 ms）会记错误并丢弃该行。请保持纯函数、避免死循环。
-
-## 发送示例
-
-- 文本：`hello` + 行尾 LF  
-- HEX：`01 0A FF`（允许空白分隔）
-
-## 架构（简述）
-
-- **扩展宿主**：`serialport` 读写、协议解码、有界缓冲、导出  
-- **Webview**：uPlot 波形 + 终端 + 发送条，约 50 ms 批量刷新  
-- 协议解码与串口 I/O 不在 Webview 内，避免界面卡顿阻塞接收  
-
-主要目录：
-
-```text
-src/
-  extension.ts          激活与命令
-  appController.ts      服务编排与 UI 刷新
-  serial/               串口服务
-  protocol/             JustFloat / FireWater / Raw / Custom / Router
-  store/                RawBuffer / SeriesStore / ChannelRegistry
-  state/                workspace 配置读写
-  export/               CSV / 日志导出
-  webview/              主面板与侧栏
-```
-
-## 开发脚本
-
-| 命令 | 作用 |
-|------|------|
-| `npm run compile` | `tsc` 编译到 `out/` |
-| `npm test` | vitest 单元测试 |
-| `npm run watch` | 监听编译 |
-| `npm run package` | `vsce package` 打 VSIX（需自行安装 `@vscode/vsce`） |
-
-## 排障
-
-| 现象 | 处理 |
-|------|------|
-| 端口列表为空 | 点侧栏刷新；确认驱动（如 CH340）已安装 |
-| 连接失败 / Access denied | 关闭 VOFA+、SSCOM 等占用程序 |
-| 有 RX 但无波形 | 检查协议是否匹配；RawData 不出通道 |
-| HEX 发送报错 | 必须偶数个十六进制字符，可用空格分隔 |
-
-## 许可
-
-原创代码 **MPL-2.0**，见 [LICENSE](LICENSE)。
-
-第三方：
-
-- [serialport](https://github.com/serialport/node-serialport) — MIT  
-- [uPlot](https://github.com/leeoniya/uPlot) — MIT（已 vendored 于 `src/webview/media/`）  
-- VSCode Extension API — 按 Microsoft / VS Code 条款使用  
+原创代码采用 MPL-2.0，见 [许可文件](LICENSE)。第三方组件遵循各自许可证；主要组件包括 [serialport](https://github.com/serialport/node-serialport)、[uPlot](https://github.com/leeoniya/uPlot) 和 SWD 环境中的 pyOCD。

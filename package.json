@@ -1,8 +1,8 @@
 {
   "name": "serial-lab",
   "displayName": "Serial Lab",
-  "description": "Serial debugging workbench: protocols, waveform, terminal, export",
-  "version": "0.2.35",
+  "description": "串口波形、文本/HEX 收发与 STM32 SWD 运行态调参，支持连接向导和离线环境",
+  "version": "0.2.36",
   "icon": "images/icon.png",
   "publisher": "czt123",
   "repository": {
@@ -310,5 +310,15 @@
     "@vscode/vsce": "^3.9.2",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
-  }
+  },
+  "keywords": [
+    "serial",
+    "STM32",
+    "SWD",
+    "DAPLink",
+    "CH340",
+    "waveform",
+    "串口",
+    "调参"
+  ]
 }
