@@ -32,6 +32,15 @@ class Target:
 
 
 class BackendTests(unittest.TestCase):
+    def test_discovery_uses_json_without_attaching(self):
+        import sys
+        with patch('subprocess.run') as run:
+            run.return_value.stdout = '{"status": 0, "targets": [{"name": "chip"}]}'
+            result = Backend().dispatch('targets', {})
+            self.assertEqual(result['targets'], [{'name': 'chip'}])
+            self.assertEqual(run.call_args.args[0], [sys.executable, '-m', 'pyocd', 'json', '--targets'])
+            self.assertFalse(run.call_args.kwargs.get('shell', False))
+
     def test_attach_options_and_disconnect_never_control_core(self):
         import sys
         import types
@@ -142,3 +151,10 @@ class ElfTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+class DiscoveryCompatibilityTests(unittest.TestCase):
+    def test_probe_boards_response_is_normalized(self):
+        with unittest.mock.patch('subprocess.run') as run:
+            run.return_value.stdout = '{"status":0,"boards":[{"unique_id":"dap1","info":"CMSIS-DAP"}]}'
+            result = Backend().dispatch('probes', {})
+            self.assertEqual(result['probes'][0]['unique_id'], 'dap1')
+            self.assertEqual(result['probes'][0]['description'], 'CMSIS-DAP')

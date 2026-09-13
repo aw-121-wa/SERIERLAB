@@ -1,8 +1,12 @@
 # SWD / DAPLink 运行态调参
 
-Serial Lab 0.2.23 保留 Native 串口调参，另增 SWD 参数来源。两条连接独立：可以继续用串口采样，同时通过 DAPLink 修改 RAM 参数。STM32 无需 Serial Lab SDK、串口协议或调参任务。
+Serial Lab 0.2.32 保留 Native 串口调参，另增 SWD 参数来源。两条连接独立：可以继续用串口采样，同时通过 DAPLink 修改 RAM 参数。STM32 无需 Serial Lab SDK、串口协议或调参任务。
+
+首次使用推荐点击 **连接向导**：选择 SWD 探针、手动搜索选择芯片、准备支持包，然后选择 ELF 和参数。芯片不会从 ELF 自动识别。缺少 target/ELF 的连接请求会打开向导。工作台可查看实际连接配置并复制诊断报告；离线安装见 [SWD_OFFLINE.md](SWD_OFFLINE.md)。
 
 ## 安装与连接
+
+0.2.33 起，VS Code 启动后自动后台检查已有 SWD 环境，结果在“输出 → Serial Lab”中查看。插件直接调用环境的 Python，不需要运行 activate。没有环境时使用连接向导下载安装，或导入离线包；启动预检不自动连接探针。
 
 1. 默认无需安装 Python。保持 `serialLab.swd.pythonPath` 为空，首次选择 ELF 或连接 SWD 时点击“安装”。插件会下载独立 Python 3.11、pyOCD 0.45.1 和 pyelftools 0.33，以后直接复用。已有自定义 Python 配置会优先使用；若要自动管理，请手动清空此设置。离线或需要自行管理时，给自己的 Python 安装依赖并填写解释器路径：
 

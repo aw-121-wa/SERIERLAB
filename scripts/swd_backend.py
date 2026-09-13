@@ -8,6 +8,7 @@ import json
 import math
 import os
 import struct
+import subprocess
 import sys
 
 
@@ -253,6 +254,17 @@ class Backend:
             session.close()
 
     def dispatch(self, method, args):
+        if method in ('probes', 'targets'):
+            # Discovery uses pyOCD's structured listing; it never creates a Session.
+            result = subprocess.run([sys.executable, '-m', 'pyocd', 'json', '--' + method],
+                                    capture_output=True, text=True, check=True, timeout=25,
+                                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            data = json.loads(result.stdout)
+            if method == 'probes' and 'probes' not in data and isinstance(data.get('boards'), list):
+                data['probes'] = [dict(p, description=p.get('info', p.get('unique_id', ''))) for p in data['boards']]
+            if data.get('status', 0) != 0 or not isinstance(data.get(method), list):
+                raise ValueError(data.get('error') or f"pyOCD {method} discovery failed: status={data.get('status')}, fields={list(data.keys())}, stderr={result.stderr[-1500:]}")
+            return data
         if method == 'disconnect':
             self.close()
             return None
@@ -290,7 +302,7 @@ class Backend:
                     checked_parameter(target, param)
                 verified = verify_firmware(target, sections)
                 self.params = {p['id']: p for p in params}
-                return dict(parameters=params, sha256=digest, verifiedBytes=verified)
+                return dict(parameters=params, symbols=symbols, sha256=digest, verifiedBytes=verified, probeId=probes[0].unique_id)
             except Exception:
                 self.close()
                 raise

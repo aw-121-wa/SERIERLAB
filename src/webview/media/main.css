@@ -298,3 +298,4 @@ body {
   opacity: 0.65;
   padding: 8px;
 }
+#connection-details { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; padding: 8px; }

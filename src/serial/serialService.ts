@@ -17,6 +17,8 @@ export class SerialService extends EventEmitter {
   private readonly SerialPortImpl: SerialPortCtor;
   private readonly listPortsImpl: ListPortsFn;
   private state: ConnectionState = 'disconnected';
+  private generation = 0;
+  activeOptions?: Readonly<SerialPortOpenOptions>;
   rxBytes = 0;
   txBytes = 0;
   lastError = '';
@@ -50,11 +52,19 @@ export class SerialService extends EventEmitter {
       typeof options === 'string'
         ? { path: options, baudRate: baudRate ?? 115200, autoOpen: false }
         : { ...options, autoOpen: false };
-    await this.disconnect();
+    const cleanup = this.disconnect();
+    const generation = ++this.generation;
+    await cleanup;
+    if (generation !== this.generation) return;
     this.setState('connecting');
     await new Promise<void>((resolve, reject) => {
       const port = new this.SerialPortImpl(openOpts);
       port.open((err) => {
+        if (generation !== this.generation) {
+          if (!err) port.close(() => resolve());
+          else resolve();
+          return;
+        }
         if (err) {
           this.lastError = err.message;
           this.setState('error');
@@ -62,16 +72,22 @@ export class SerialService extends EventEmitter {
           return;
         }
         this.port = port;
+        this.activeOptions = Object.freeze({ ...openOpts });
+        this.rxBytes = 0; this.txBytes = 0; this.lastError = '';
         port.on('data', (buf: Buffer) => {
+          if (this.port !== port) return;
           this.rxBytes += buf.length;
           this.emit('data', new Uint8Array(buf));
         });
         port.on('error', (e: Error) => {
+          if (this.port !== port) return;
           this.lastError = e.message;
           this.setState('error');
         });
         port.on('close', () => {
+          if (this.port !== port) return;
           this.port = null;
+          this.activeOptions = undefined;
           this.setState('disconnected');
         });
         this.setState('connected');
@@ -81,8 +97,10 @@ export class SerialService extends EventEmitter {
   }
 
   async disconnect(): Promise<void> {
+    const generation = ++this.generation;
     const port = this.port;
     this.port = null;
+    this.activeOptions = undefined;
     if (!port) {
       this.setState('disconnected');
       return;
@@ -90,7 +108,7 @@ export class SerialService extends EventEmitter {
     await new Promise<void>((resolve) => {
       port.close(() => resolve());
     });
-    this.setState('disconnected');
+    if (generation === this.generation) this.setState('disconnected');
   }
 
   async write(bytes: Uint8Array): Promise<void> {

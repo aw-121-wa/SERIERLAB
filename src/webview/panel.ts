@@ -56,7 +56,10 @@ function getHtml(webview: vscode.Webview, ext: vscode.Uri): string {
     <label>RX <select id="rx-enc"><option value="text">文本</option><option value="hex">HEX</option></select></label>
     <span id="span-info" class="hint"></span>
     <span id="status" class="status"></span>
+    <button data-swd="wizard">连接向导</button>
+    <button data-swd="diagnostics">复制诊断报告</button>
   </div>
+  <details><summary>实际连接配置与诊断</summary><pre id="connection-details"></pre></details>
   <div class="main-grid">
     <div class="plot-col">
       <div id="plot"></div>
@@ -72,6 +75,8 @@ function getHtml(webview: vscode.Webview, ext: vscode.Uri): string {
           <button data-swd="settings">SWD 设置</button>
           <button data-swd="runtime">安装/修复环境</button>
           <button data-swd="pack">安装芯片支持</button>
+          <button data-swd="offlineImport">导入离线环境</button>
+          <button data-swd="offlineExport">导出离线环境</button>
           <button data-swd="help">使用说明</button>
           <button data-swd="connect">连接 SWD</button>
           <button data-swd="disconnect">断开 SWD</button>

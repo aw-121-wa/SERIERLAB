@@ -151,3 +151,7 @@ describe('S14.3 RuntimeVariableEditor', () => {
     await expect(editor.prepare(stale)).rejects.toThrow(/固件/);
   });
 });
+it('rejects whitespace-only numerical edits', () => {
+  expect(validateRuntimeEditInput('float32', '   ').ok).toBe(false);
+  expect(validateRuntimeEditInput('int32', '').ok).toBe(false);
+});

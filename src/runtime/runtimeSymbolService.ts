@@ -90,6 +90,12 @@ export class RuntimeSymbolService {
     return this.firmware;
   }
 
+  /** Candidate names only; actions require explicit selection, never infer an instance. */
+  candidateExpressions(token: string): string[] {
+    if (!splitExpression(token)) return [];
+    return [...this.byPath.keys()].filter(name => name === token || name.startsWith(token + '.') || name.startsWith(token + '[') || name.endsWith('.' + token)).sort();
+  }
+
   isCurrent(symbol: RuntimeSymbol): boolean {
     return !!this.opts.firmwareSha256 && symbol.firmware.sha256 === this.opts.firmwareSha256;
   }

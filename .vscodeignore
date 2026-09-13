@@ -24,5 +24,7 @@ tsconfig.json
 vitest.config.ts
 .gitignore
 *.vsix
+*.slrt
+.offline-smoke-*/**
 *.log
 **/.DS_Store

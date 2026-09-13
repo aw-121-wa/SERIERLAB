@@ -8,6 +8,7 @@ describe('parameter backend routing', () => {
   it('preserves Native selection instead of falling back to JustFloat', () => {
     const c = Object.create(AppController.prototype) as any;
     c.router = new ProtocolRouter();
+    c.serial = { rxBytes: 0 };
     c.applyProtocolFromState();
     expect(c.router.protocolKind).toBe('native');
   });

@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../swd/runtime', () => ({ resolvePython: vi.fn(async () => 'python') }));
-const env = vi.hoisted(() => ({ clients: [] as any[], trusted: true, pollHz: 0 }));
+const env = vi.hoisted(() => ({ clients: [] as any[], trusted: true, pollHz: 0, watch: [] as any[] }));
 vi.mock('vscode', () => ({
+  ConfigurationTarget: { Workspace: 2 },
   workspace: {
     get isTrusted() { return env.trusted; }, workspaceFolders: [{ uri: { fsPath: 'D:/firmware' } }],
-    getConfiguration: () => ({ get: (key: string, fallback: unknown) => ({ 'swd.elf': 'test.elf', 'swd.target': 'stm32f407vg', 'swd.pollHz': env.pollHz } as any)[key] ?? fallback }),
+    getConfiguration: () => ({ get: (key: string, fallback: unknown) => ({ 'swd.elf': 'test.elf', 'swd.target': 'stm32f407vg', 'swd.pollHz': env.pollHz, 'swd.watch': env.watch } as any)[key] ?? fallback, update: async (_key: string, value: any) => { env.watch = value; } }),
   },
   Uri: { joinPath: (...parts: any[]) => ({ fsPath: parts.join('/') }) },
 }));
@@ -20,7 +21,7 @@ vi.mock('../swd/runtimeChannels', async (importOriginal) => {
 });
 vi.mock('../swd/client', () => ({ SwdClient: class {
   request = vi.fn(async (method: string) => method === 'connect'
-    ? { parameters: [{ id: 1, path: 'kp', type: 'float32', writable: true }], verifiedBytes: 128 }
+    ? { parameters: [{ id: 1, path: 'kp', type: 'float32', writable: true }], symbols: [{ path: 'not_watched', address: 0x20000008, type: 'float32', size: 4, writable: true }], verifiedBytes: 128, sha256: 'b'.repeat(64) }
     : method === 'read' ? [{ id: 1, value: 3.5 }] : 4);
   close = vi.fn(async () => {});
   dispose = vi.fn();
@@ -30,6 +31,50 @@ import { SwdController } from '../swd/controller';
 import { resolvePython } from '../swd/runtime';
 
 describe('SWD controller lifecycle', () => {
+  it('indexes ELF variables that are not yet watched', async () => {
+    const c = new SwdController({ extensionUri: 'ext' } as any, vi.fn());
+    await c.connect();
+    expect(c.symbolRecords.some(s => s.path === 'not_watched')).toBe(true);
+    await c.disconnect();
+  });
+  it('adding a watch during connection waits then loads it', async () => {
+    env.watch = [];
+    let release!: (value: string) => void;
+    vi.mocked(resolvePython).mockImplementationOnce(() => new Promise(r => { release = r; }));
+    const c = new SwdController({ extensionUri: 'ext' } as any, vi.fn());
+    const connecting = c.connect();
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    const watching = c.ensureWatch('new_gain');
+    await Promise.resolve(); release('python');
+    await Promise.all([connecting, watching]);
+    expect(c.state).toBe('ready');
+    expect(env.clients.at(-1).request).toHaveBeenCalledWith('connect', expect.objectContaining({ watch: [{ path: 'new_gain' }] }));
+    await c.disconnect();
+  });
+  it('clears actual connection details after a failed poll', async () => {
+    const c = new SwdController({ extensionUri: 'ext' } as any, vi.fn());
+    await c.connect();
+    expect(c.activeConfiguration).toBeDefined();
+    env.clients[0].request.mockRejectedValueOnce(new Error('probe lost'));
+    await c.refresh();
+    expect(c.activeConfiguration).toBeUndefined();
+    expect(c.detail).toBe('probe lost');
+  });
+  it('uses the backend verified hash even when the on-disk ELF changed', async () => {
+    const c = new SwdController({ extensionUri: 'ext' } as any, vi.fn());
+    await c.connect();
+    expect(c.elfSha256).toBe('b'.repeat(64));
+    await c.disconnect();
+  });
+  it('reopens the backend when a ready session gains a watch', async () => {
+    env.watch = [];
+    const c = new SwdController({ extensionUri: 'ext' } as any, vi.fn());
+    await c.connect();
+    await c.ensureWatch('new_gain');
+    expect(env.clients).toHaveLength(2);
+    expect(env.clients[1].request).toHaveBeenCalledWith('connect', expect.objectContaining({ watch: [{ path: 'new_gain' }] }));
+    await c.disconnect();
+  });
   it('disconnect during runtime preparation prevents attachment', async () => {
     let release!: (value: string) => void;
     vi.mocked(resolvePython).mockImplementationOnce(() => new Promise(r => { release = r; }));

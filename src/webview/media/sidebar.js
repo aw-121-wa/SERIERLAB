@@ -6,6 +6,8 @@
   const protocolEl = document.getElementById('protocol');
   const channelsEl = document.getElementById('channels');
   const connStateEl = document.getElementById('conn-state');
+  document.getElementById('wizard').addEventListener('click', () => vscode.postMessage({ type: 'wizard' }));
+  document.getElementById('diagnostics').addEventListener('click', () => vscode.postMessage({ type: 'diagnostics' }));
 
   function selectedPath() {
     return portEl.value || '';
@@ -123,7 +125,6 @@
   baudEl.addEventListener('change', saveConn);
 
   document.getElementById('connect').addEventListener('click', function () {
-    saveConn();
     vscode.postMessage({
       type: 'connect',
       path: selectedPath(),
@@ -157,7 +158,10 @@
     }
     if (msg.type === 'ports') fillPorts(msg.ports || [], msg.selected);
     if (msg.type === 'channels') fillChannels(msg.channels || []);
-    if (msg.type === 'connState') setConnState(msg.state);
+    if (msg.type === 'connState') {
+      setConnState(msg.state);
+      document.getElementById('effective-connection').textContent = msg.summary || '';
+    }
   });
 
   vscode.postMessage({ type: 'ready' });

@@ -204,7 +204,7 @@
       height: 280,
       series: [{}].concat(
         list.map(function (c) {
-          return { label: c.name, stroke: c.color, show: !!c.visible };
+          return { label: c.name, stroke: c.color, show: !!c.visible, points: { show: false } };
         })
       ),
       scales: {
@@ -990,6 +990,7 @@
     else if (msg.type === 'parameters.snapshot') applyParametersSnapshot(msg);
     else if (msg.type === 'parameters.update') applyParametersUpdate(msg);
     else if (msg.type === 'status') {
+      document.getElementById('connection-details').textContent = msg.connectionSummary || '';
       var drop = msg.droppedUiEntries ? ' · dropUI ' + msg.droppedUiEntries : '';
       document.getElementById('status').textContent =
         msg.state + ' · ' + msg.path + ' · ' + msg.protocol +

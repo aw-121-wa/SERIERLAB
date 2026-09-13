@@ -1,6 +1,8 @@
 # Serial Lab
 
-**0.2.22：保留 Native 串口调参，新增 SWD / DAPLink 运行态 RAM 调参。** STM32 无需上位机通信代码；从 ELF 选择参数，支持上下限和写后读回。使用说明见工程及扩展安装目录中的 `SWD.md`。
+**0.2.32：新增连接向导、实际配置与诊断报告、Windows SWD 离线环境导入/导出。** 保留 Native 串口和 SWD / DAPLink 运行态 RAM 调参，芯片由用户选择，不从 ELF 自动识别。
+
+首次安装请阅读 [使用说明](使用说明.md)，包括 VSIX 安装、环境准备、接线、工程要求及调参步骤。详细技术说明见 [SWD.md](SWD.md)。
 
 VSCode 串口调试工作台：连接本机串口，解析 JustFloat / FireWater / RawData 与自定义协议，实时波形、文本/HEX 终端、指令发送、采样与原始日志导出。
 

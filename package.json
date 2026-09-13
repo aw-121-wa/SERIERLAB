@@ -2,7 +2,7 @@
   "name": "serial-lab",
   "displayName": "Serial Lab",
   "description": "Serial debugging workbench: protocols, waveform, terminal, export",
-  "version": "0.2.30",
+  "version": "0.2.35",
   "icon": "images/icon.png",
   "publisher": "czt123",
   "repository": {
@@ -33,7 +33,8 @@
     "onCommand:serialLab.runtime.watch",
     "onCommand:serialLab.runtime.plot",
     "onCommand:serialLab.runtime.edit",
-    "onCommand:serialLab.runtime.reveal"
+    "onCommand:serialLab.runtime.reveal",
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -107,6 +108,22 @@
       {
         "command": "serialLab.runtime.reveal",
         "title": "Serial Lab: Reveal in Runtime Inspector"
+      },
+      {
+        "command": "serialLab.connectionWizard",
+        "title": "Serial Lab: ??????"
+      },
+      {
+        "command": "serialLab.copyDiagnostics",
+        "title": "Serial Lab: ??????"
+      },
+      {
+        "command": "serialLab.swd.exportOffline",
+        "title": "Serial Lab: ?? SWD ????"
+      },
+      {
+        "command": "serialLab.swd.importOffline",
+        "title": "Serial Lab: ?? SWD ????"
       }
     ],
     "menus": {

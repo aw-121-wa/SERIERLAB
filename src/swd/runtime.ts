@@ -4,6 +4,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { download, runtimeAsset, verifyDownload } from './runtimeDownload';
 import { run } from './runtimeProcess';
+import { resolveOfflinePython } from './offlineRuntime';
 
 const pending = new Map<string, Promise<string>>();
 const check = 'import importlib.metadata as m; import pyocd, elftools; print(m.version("pyocd")+"/"+m.version("pyelftools"))';
@@ -11,19 +12,25 @@ const version = '0.45.1/0.33';
 function configuredProxy(): string | undefined {
   return vscode.workspace.getConfiguration('http').get<string>('proxy', '') || process.env.HTTPS_PROXY || process.env.https_proxy;
 }
-export async function resolvePython(context: vscode.ExtensionContext, repair = false): Promise<string> {
+export async function resolvePython(context: vscode.ExtensionContext, repair = false, allowInstall = true): Promise<string> {
   if (!vscode.workspace.isTrusted) throw new Error('SWD 需要受信任的工作区');
   const custom = vscode.workspace.getConfiguration('serialLab').get<string>('swd.pythonPath', '').trim();
   if (custom) {
     try { await run(custom, ['-c', check], () => {}, undefined, 30000); return custom; }
     catch { throw new Error('自定义 Python 缺少 pyocd/pyelftools 或无法启动。请安装 scripts/requirements-swd.txt，或清空 serialLab.swd.pythonPath 使用自动环境。'); }
   }
+  if (!repair) {
+    const offline = await resolveOfflinePython(context.globalStorageUri.fsPath);
+    if (offline) return offline;
+  }
   const root = path.join(context.globalStorageUri.fsPath, 'swd', 'runtime-v1');
+  // Read-only startup checks must not publish a failed no-install task to interactive callers.
+  if (!allowInstall) return managed(root, context, repair, false);
   let task = pending.get(root);
   if (!task) { task = managed(root, context, repair).finally(() => pending.delete(root)); pending.set(root, task); }
   return task;
 }
-async function managed(root: string, context: vscode.ExtensionContext, repair: boolean): Promise<string> {
+async function managed(root: string, context: vscode.ExtensionContext, repair: boolean, allowInstall = true): Promise<string> {
   const pythonIn = (dir: string) => path.join(dir, process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
   if (!repair) {
     try {
@@ -33,6 +40,7 @@ async function managed(root: string, context: vscode.ExtensionContext, repair: b
       if ((await run(python, ['-c', check], () => {}, undefined, 30000)).trim() === version) return python;
     } catch { /* Missing or damaged environments are installed only after consent. */ }
   }
+  if (!allowInstall) throw new Error('SWD 环境尚未准备或已损坏；请使用连接向导、安装/修复环境或导入离线环境。');
   const asset = runtimeAsset(process.platform, process.arch);
   const answer = await vscode.window.showInformationMessage('Serial Lab 需要下载独立的 Python 和 SWD 依赖（uv、pyOCD、pyelftools）。仅存放在插件存储目录，不修改系统 Python。', { modal: true }, '安装');
   if (answer !== '安装') throw new Error('已取消 SWD 环境安装');

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { serialDiagnosis } from './connectionDiagnostics';
+import { expressionAtOffset } from './runtime/sourceExpression';
 import { SerialService } from './serial/serialService';
 import { ProtocolRouter } from './protocol/router';
 import { RawBuffer } from './store/rawBuffer';
@@ -55,6 +57,8 @@ export class AppController implements vscode.Disposable {
   private parameterSource: 'native' | 'swd' = 'native';
   private parameterEpoch = 0;
   private paused = false;
+  private decodedBatches = 0;
+  private protocolRxBaseline = 0;
   private rxEncoding: 'text' | 'hex' = 'text';
   private timer: NodeJS.Timeout | undefined;
 
@@ -136,6 +140,8 @@ export class AppController implements vscode.Disposable {
   }
 
   private applyProtocolFromState(): void {
+    this.decodedBatches = 0;
+    this.protocolRxBaseline = this.serial.rxBytes;
     const p = state.loadProtocol();
     const scriptAllowed = vscode.workspace.isTrusted;
     if (p === 'custom') {
@@ -262,12 +268,30 @@ export class AppController implements vscode.Disposable {
   }
 
   async watchRuntimeAtCursor(): Promise<string> {
-    const r = this.resolveAtEditor();
-    if (!r.ok) throw new Error(r.reason === 'no-editor' ? '请在 C/C++ 源码编辑器中使用' : '光标下没有受支持的运行时变量');
+    const r = await this.resolveRuntimeAction();
+    if (!r) return '';
     if (!this.runtimeSymbols?.isCurrent(r.symbol)) throw new Error('固件已变更，请重新加载 ELF');
     this.parameterSource = 'swd';
     await this.swd.ensureWatch(r.symbol.expression);
     return r.symbol.expression;
+  }
+
+  async resolveRuntimeAction(): Promise<Extract<RuntimeSymbolResolution, { ok: true }> | undefined> {
+    const r = this.resolveAtEditor();
+    if (r.ok) return r;
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) throw new Error('请在 C/C++ 源码编辑器中使用');
+    const svc = this.runtimeSymbols;
+    if (!svc) throw new Error('请先连接 SWD 并加载匹配的 ELF，再使用源码 Watch/Edit');
+    const token = expressionAtOffset(editor.document.getText(), editor.document.offsetAt(editor.selection.active))?.text;
+    const candidates = token ? svc.candidateExpressions(token) : [];
+    if (!candidates.length) throw new Error(`无法解析 ${token || '光标位置'}：请选中完整变量表达式，例如 imu_yaw_test.offset_deg；类型名、局部变量和指针表达式不支持`);
+    const selected = await vscode.window.showQuickPick(candidates, { placeHolder: '选择对应的完整 RAM 变量（成员声明本身不是实例）' });
+    if (!selected) return undefined;
+    if (this.runtimeSymbols !== svc) throw new Error('SWD 会话已改变，请重新选择变量');
+    const resolved = svc.resolveExpression(selected, editor.document.uri.fsPath);
+    if (!resolved.ok) throw new Error(`变量 ${selected} 无法唯一解析：${resolved.reason}`);
+    return resolved;
   }
 
   async plotRuntimeAtCursor(): Promise<string> {
@@ -324,6 +348,7 @@ export class AppController implements vscode.Disposable {
     }
     if (this.router.protocolKind === 'raw') return;
     const batches = this.router.feed(bytes, t);
+    this.decodedBatches += batches.length;
     for (const b of batches) {
       // Control plane: discovery + metadata only on change.
       const sync = this.channels.syncFromBatch(b.values.length, this.router.protocolKind, {
@@ -458,6 +483,9 @@ export class AppController implements vscode.Disposable {
     });
     try {
       await this.serial.connect(open);
+      if (this.serial.getState() !== 'connected') return;
+      this.decodedBatches = 0;
+      this.protocolRxBaseline = 0;
       log.info(
         `Connected ${open.path} @ ${open.baudRate} ${open.dataBits}${String(open.parity)[0]}${open.stopBits} rtscts=${open.rtscts} xon=${open.xon}`
       );
@@ -483,15 +511,24 @@ export class AppController implements vscode.Disposable {
     });
   }
 
-  private async handleSwdAction(action: string): Promise<void> {
+  async handleSwdAction(action: string): Promise<void> {
     try {
-      if (action === 'connect') await this.swd.connect();
+      if (action === 'connect') {
+        const cfg = vscode.workspace.getConfiguration('serialLab');
+        if (!cfg.get<string>('swd.target', '').trim() || !cfg.get<string>('swd.elf', '').trim()) {
+          await vscode.commands.executeCommand('serialLab.connectionWizard');
+        } else await this.swd.connect();
+      }
       else if (action === 'disconnect') await this.swd.disconnect();
       else if (action === 'elf') await this.swd.chooseElf();
       else if (action === 'watch') await this.swd.chooseWatches();
       else if (action === 'refresh') await this.swd.refresh();
       else if (action === 'runtime') await vscode.commands.executeCommand('serialLab.swd.installRuntime');
       else if (action === 'pack') await vscode.commands.executeCommand('serialLab.swd.installTargetPack');
+      else if (action === 'wizard') await vscode.commands.executeCommand('serialLab.connectionWizard');
+      else if (action === 'diagnostics') await this.copyDiagnostics();
+      else if (action === 'offlineImport') await vscode.commands.executeCommand('serialLab.swd.importOffline');
+      else if (action === 'offlineExport') await vscode.commands.executeCommand('serialLab.swd.exportOffline');
       else if (action === 'settings') await vscode.commands.executeCommand('workbench.action.openSettings', 'serialLab.swd');
       else if (action === 'help') await vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.joinPath(this.context.extensionUri, 'SWD.md'));
     } catch (e) { void vscode.window.showErrorMessage(`Serial Lab SWD: ${(e as Error).message}`); }
@@ -615,7 +652,8 @@ export class AppController implements vscode.Disposable {
     this.post({
       type: 'status',
       state: this.serial.getState(),
-      path: state.loadConnection(this.context).path,
+      path: this.serial.activeOptions?.path ?? '',
+      connectionSummary: this.connectionSummary(),
       protocol: this.router.protocolKind,
       rxBytes: this.serial.rxBytes,
       txBytes: this.serial.txBytes,
@@ -625,6 +663,43 @@ export class AppController implements vscode.Disposable {
       droppedUiBytes: this.pendingUi.droppedByteCount,
       tMs: this.lastRx.tMs,
     });
+  }
+
+  connectionDiagnostics() {
+    const cfg = vscode.workspace.getConfiguration('serialLab');
+    const snap = this.projectConfig.snapshot();
+    return {
+      version: this.context.extension?.packageJSON?.version,
+      platform: `${process.platform}/${process.arch}`,
+      serial: {
+        state: this.serial.getState(), active: this.serial.activeOptions ?? null,
+        protocol: this.router.protocolKind, rxBytes: this.serial.rxBytes, txBytes: this.serial.txBytes,
+        decodedBatches: this.decodedBatches, decoderErrors: this.router.errors, lastError: this.serial.lastError,
+        diagnosis: serialDiagnosis(this.serial.getState(), Math.max(0, this.serial.rxBytes - this.protocolRxBaseline), this.decodedBatches, this.router.protocolKind),
+        nativeState: this.native?.getState() ?? 'disconnected',
+        nextConnection: { path: state.loadConnection(this.context).path, ...snap.effective.serial },
+        configurationSource: snap.effective.sources.serial, projectConfigError: snap.error,
+      },
+      swd: { state: this.swd.state, detail: this.swd.detail, active: this.swd.activeConfiguration ?? null,
+        elfSha256: this.swd.elfSha256,
+        nextConnection: { target: cfg.get('swd.target', ''), probeId: cfg.get('swd.probeId', ''), elf: cfg.get('swd.elf', '') } },
+    };
+  }
+
+  connectionSummary(): string {
+    const d = this.connectionDiagnostics();
+    const a = d.serial.active;
+    const s = d.swd.active;
+    return [a ? `串口实际：${a.path} @ ${a.baudRate} / ${a.dataBits ?? 8}${a.parity ?? 'none'}${a.stopBits ?? 1} / ${d.serial.protocol}` : '串口：未连接',
+      d.serial.diagnosis,
+      `下次连接：${d.serial.nextConnection.path || '未选端口'} @ ${d.serial.nextConnection.baudRate}（来源 ${d.serial.configurationSource}；修改后重连生效）`,
+      s ? `SWD 实际：${s.target} / 探针 ${s.probeId || '未报告'} / ${s.elf} / ${s.frequency} Hz / 刷新 ${s.pollHz} Hz` : `SWD：${d.swd.state} ${d.swd.detail}`,
+      `SWD 待连接：${d.swd.nextConnection.target || '未选芯片'} / ${d.swd.nextConnection.elf || '未选 ELF'}`].join('\n');
+  }
+
+  async copyDiagnostics(): Promise<void> {
+    await vscode.env.clipboard.writeText(JSON.stringify(this.connectionDiagnostics(), null, 2));
+    void vscode.window.showInformationMessage('Serial Lab: 诊断报告已复制（包含本机端口、探针 ID 和工程路径，可在分享前删去）');
   }
 
   private flushUi(): void {

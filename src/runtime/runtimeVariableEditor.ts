@@ -55,6 +55,7 @@ export function validateRuntimeEditInput(
     if (s === 'false' || s === '0') return { ok: true, value: false };
     return { ok: false, error: 'bool 必须为 true/false' };
   }
+  if (typeof raw === 'string' && !raw.trim()) return { ok: false, error: '请输入数值，不能只包含空格' };
   const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
   if (!Number.isFinite(n)) return { ok: false, error: '需要有限数值' };
   if (type === 'int32') {

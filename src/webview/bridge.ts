@@ -21,6 +21,7 @@ export type HostToWebview =
   | {
       type: 'status';
       state: string;
+      connectionSummary?: string;
       path: string;
       protocol: string;
       rxBytes: number;
@@ -75,7 +76,7 @@ export type HostToWebview =
 export type WebviewToHost =
   | { type: 'ready' }
   | { type: 'parameters.source'; source: 'native' | 'swd' }
-  | { type: 'swd.action'; action: 'connect' | 'disconnect' | 'elf' | 'watch' | 'refresh' | 'settings' | 'help' | 'runtime' | 'pack' }
+  | { type: 'swd.action'; action: 'connect' | 'disconnect' | 'elf' | 'watch' | 'refresh' | 'settings' | 'help' | 'runtime' | 'pack' | 'wizard' | 'diagnostics' | 'offlineImport' | 'offlineExport' }
   | { type: 'plot.needSnapshot'; reason?: string }
   | { type: 'pause'; paused: boolean }
   | { type: 'toggleChannel'; id: string; visible: boolean }

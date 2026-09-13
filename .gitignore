@@ -13,3 +13,5 @@ node_modules/
 *.vsix
 sdk/c/tests/seriallab-native-c-tests
 sdk/c/tests/seriallab-native-c-tests.exe
+*.slrt
+.offline-smoke-*/

@@ -3,7 +3,7 @@ import * as path from 'path';
 import { SwdClient } from './client';
 import { resolvePython } from './runtime';
 import { ParameterView } from '../protocol/native/parameterView';
-import { firmwareIdentityFromPath, swdChannelId } from './runtimeChannels';
+import { swdChannelId } from './runtimeChannels';
 import { DwarfSymbolRecord } from '../runtime/runtimeSymbolService';
 import { normalizeSourceScope } from '../runtime/runtimeSymbolIdentity';
 
@@ -38,6 +38,7 @@ export class SwdController implements vscode.Disposable {
   elfSha256 = '';
   /** Actual global poll rate (S13 v1 — not per-variable). */
   pollHz = 0;
+  activeConfiguration?: { target: string; probeId: string; elf: string; frequency: number; pollHz: number };
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -106,6 +107,7 @@ export class SwdController implements vscode.Disposable {
    * so the existing poll loop picks it up (no second timer).
    */
   async ensureWatch(expression: string): Promise<void> {
+    const requestedGeneration = this.generation;
     const cfg = vscode.workspace.getConfiguration('serialLab');
     const watch = cfg.get<{ path: string }[]>('swd.watch', []) ?? [];
     const alreadyListed = watch.some((w) => w.path === expression);
@@ -117,12 +119,17 @@ export class SwdController implements vscode.Disposable {
         vscode.ConfigurationTarget.Workspace
       );
     }
+    if (this.connecting) await this.connecting;
+    if (requestedGeneration !== this.generation) return;
     if (this.state === 'ready' && this.isWatching(expression)) return;
     if (this.state === 'disconnected' && !alreadyListed) {
       // Saved for next connect; caller may connect explicitly.
       return;
     }
     if (this.state !== 'disconnected') {
+      const reconnectGeneration = this.generation + 1;
+      await this.disconnect();
+      if (this.generation !== reconnectGeneration) return;
       await this.connect();
     }
   }
@@ -195,13 +202,18 @@ export class SwdController implements vscode.Disposable {
       const result = await client.request<{
         parameters: (ParameterView & { address?: number; size?: number; sourceFile?: string })[];
         verifiedBytes: number;
+        sha256: string;
+        symbols: DwarfSymbolRecord[];
+        probeId?: string;
       }>('connect', cfg.args);
       if (generation !== this.generation) return;
       this.elfPath = cfg.args.elf;
-      this.elfSha256 = firmwareIdentityFromPath(cfg.args.elf).sha256;
+      if (!/^[a-f0-9]{64}$/.test(result.sha256)) throw new Error('SWD 后端未返回有效的固件校验标识');
+      this.elfSha256 = result.sha256;
+      this.activeConfiguration = { target: cfg.args.target, probeId: result.probeId || cfg.args.probeId, elf: cfg.args.elf, frequency: cfg.args.frequency, pollHz: cfg.pollHz };
       this.pollHz = cfg.pollHz;
       this.parameters = result.parameters;
-      this.symbolRecords = result.parameters
+      this.symbolRecords = (result.symbols ?? result.parameters)
         .filter((p) => typeof p.address === 'number')
         .map((p) => ({
           path: p.path,
@@ -286,6 +298,7 @@ export class SwdController implements vscode.Disposable {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
     this.state = 'error'; this.detail = (error as Error).message;
+    this.activeConfiguration = undefined;
     const client = this.client; this.client = undefined;
     if (client) this.closing = this.closing.then(() => client.close()).catch(() => {});
     this.changed();
@@ -300,6 +313,7 @@ export class SwdController implements vscode.Disposable {
     this.symbolRecords = [];
     // Drop firmware identity so stale watches cannot be reused after ELF change.
     this.elfPath = ''; this.elfSha256 = ''; this.pollHz = 0;
+    this.activeConfiguration = undefined;
     this.changed();
     if (client) this.closing = this.closing.then(() => client.close()).catch(() => {});
     await this.closing;

@@ -19,6 +19,17 @@ describe('managed SWD environment lifecycle', () => {
     state.trusted = true; state.custom = ''; state.consent = '安装'; state.prompt.mockClear(); state.run.mockReset().mockResolvedValue('0.45.1/0.33\n'); state.download.mockReset().mockResolvedValue(Buffer.from('archive'));
   });
   afterEach(async () => { await fs.rm(root, { recursive: true, force: true }); });
+  it('startup preflight never prompts or downloads when environment is absent', async () => {
+    await expect(resolvePython(context, false, false)).rejects.toThrow('尚未准备');
+    expect(state.prompt).not.toHaveBeenCalled();
+    expect(state.download).not.toHaveBeenCalled();
+  });
+  it('startup preflight validates an existing environment', async () => {
+    const installed = await resolvePython(context);
+    state.prompt.mockClear(); state.download.mockClear();
+    expect(await resolvePython(context, false, false)).toBe(installed);
+    expect(state.prompt).not.toHaveBeenCalled(); expect(state.download).not.toHaveBeenCalled();
+  });
   it('coalesces installation and reuses a verified environment', async () => {
     const [a,b] = await Promise.all([resolvePython(context), resolvePython(context)]);
     expect(a).toBe(b); expect(state.download).toHaveBeenCalledOnce();

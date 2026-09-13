@@ -4,6 +4,12 @@ import { ChannelView } from '../store/channels';
 
 const cfg = () => vscode.workspace.getConfiguration('serialLab');
 
+function settingsTarget(): vscode.ConfigurationTarget {
+  return vscode.workspace.workspaceFile || vscode.workspace.workspaceFolders?.length
+    ? vscode.ConfigurationTarget.Workspace
+    : vscode.ConfigurationTarget.Global;
+}
+
 export type ConnSettings = {
   path: string;
   baudRate: number;
@@ -65,7 +71,7 @@ export async function saveConnection(
         parity: c.parity,
         stopBits: c.stopBits,
       },
-      vscode.ConfigurationTarget.Workspace
+      settingsTarget()
     );
   }
 }
@@ -75,7 +81,7 @@ export function loadProtocol(): string {
 }
 
 export async function saveProtocol(id: string): Promise<void> {
-  await cfg().update('protocol', id, vscode.ConfigurationTarget.Workspace);
+  await cfg().update('protocol', id, settingsTarget());
 }
 
 export function loadActiveCustomId(): string {
@@ -83,7 +89,7 @@ export function loadActiveCustomId(): string {
 }
 
 export async function saveActiveCustomId(id: string): Promise<void> {
-  await cfg().update('activeCustomProtocolId', id, vscode.ConfigurationTarget.Workspace);
+  await cfg().update('activeCustomProtocolId', id, settingsTarget());
 }
 
 export function loadCustomProtocols(): CustomProtocolConfig[] {
@@ -91,7 +97,7 @@ export function loadCustomProtocols(): CustomProtocolConfig[] {
 }
 
 export async function saveCustomProtocols(list: CustomProtocolConfig[]): Promise<void> {
-  await cfg().update('protocols', list, vscode.ConfigurationTarget.Workspace);
+  await cfg().update('protocols', list, settingsTarget());
 }
 
 export function loadChannelPrefs(): Record<string, Partial<ChannelView>> {
@@ -99,7 +105,7 @@ export function loadChannelPrefs(): Record<string, Partial<ChannelView>> {
 }
 
 export async function saveChannelPrefs(v: Record<string, Partial<ChannelView>>): Promise<void> {
-  await cfg().update('channels', v, vscode.ConfigurationTarget.Workspace);
+  await cfg().update('channels', v, settingsTarget());
 }
 
 export function loadTerminal() {
@@ -113,5 +119,5 @@ export function loadTerminal() {
 }
 
 export async function saveTerminal(t: unknown): Promise<void> {
-  await cfg().update('terminal', t, vscode.ConfigurationTarget.Workspace);
+  await cfg().update('terminal', t, settingsTarget());
 }

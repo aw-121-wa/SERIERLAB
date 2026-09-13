@@ -147,3 +147,4 @@ button.primary:hover {
   min-width: 2.5em;
   text-align: right;
 }
+#effective-connection { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }

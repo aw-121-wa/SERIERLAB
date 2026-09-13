@@ -49,6 +49,9 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
 </head><body>
   <section class="section">
     <h3>连接</h3>
+    <button id="wizard">首次连接向导</button>
+    <button id="diagnostics">复制诊断报告</button>
+    <pre id="effective-connection"></pre>
     <div class="row">
       <select id="port" class="grow"></select>
       <button id="refresh" title="刷新串口列表">刷新</button>
@@ -92,7 +95,10 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
 </body></html>`;
 
     webviewView.webview.onDidReceiveMessage(async (msg) => {
+      try {
       switch (msg.type) {
+        case 'wizard': await vscode.commands.executeCommand('serialLab.connectionWizard'); break;
+        case 'diagnostics': await this.controller.copyDiagnostics(); break;
         case 'ready': {
           await this.pushInit();
           await this.pushPorts();
@@ -162,6 +168,10 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
           break;
         }
       }
+      } catch (e) {
+        void vscode.window.showErrorMessage(`Serial Lab: 操作失败 (${msg.type}): ${e instanceof Error ? e.message : String(e)}`);
+        this.pushMirror();
+      }
     });
 
     webviewView.onDidDispose(() => {
@@ -212,6 +222,7 @@ class SidebarViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     void this.post({
       type: 'connState',
       state: this.controller.serial.getState(),
+      summary: this.controller.connectionSummary(),
     });
   }
 

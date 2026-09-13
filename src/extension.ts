@@ -6,6 +6,8 @@ import { WebviewToHost } from './webview/bridge';
 import { registerSidebar } from './webview/sidebar';
 import * as state from './state/workspaceState';
 import { resolvePython, installTargetPack } from './swd/runtime';
+import { runConnectionWizard } from './connectionWizard';
+import { exportOfflineRuntime, importOfflineRuntime } from './swd/offline';
 import { RuntimeHoverProvider } from './runtime/runtimeHoverProvider';
 import { validateRuntimeEditInput } from './runtime/runtimeVariableEditor';
 
@@ -16,6 +18,15 @@ export function activate(context: vscode.ExtensionContext): void {
   controller = new AppController(context);
   context.subscriptions.push(controller);
   registerSidebar(context, controller);
+  const prepareEnvironment = () => {
+    if (!vscode.workspace.isTrusted) return;
+    void resolvePython(context, false, false).then(
+      python => log.info(`SWD 启动预检通过：${python}（使用时直接调用，无需手动激活）`),
+      error => log.warn(`SWD 启动预检：${error instanceof Error ? error.message : String(error)}`)
+    );
+  };
+  prepareEnvironment();
+  context.subscriptions.push(vscode.workspace.onDidGrantWorkspaceTrust(prepareEnvironment));
 
   context.subscriptions.push(
     vscode.languages.registerHoverProvider(
@@ -34,6 +45,19 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('serialLab.connectionWizard', async () => {
+      try { await runConnectionWizard(context, controller!); }
+      catch (e) { void vscode.window.showErrorMessage(`Serial Lab 连接向导：${e instanceof Error ? e.message : String(e)}`); }
+    }),
+    vscode.commands.registerCommand('serialLab.copyDiagnostics', () => controller!.copyDiagnostics()),
+    vscode.commands.registerCommand('serialLab.swd.exportOffline', async () => {
+      try { await exportOfflineRuntime(context); }
+      catch (e) { void vscode.window.showErrorMessage(`Serial Lab 离线导出：${e instanceof Error ? e.message : String(e)}`); }
+    }),
+    vscode.commands.registerCommand('serialLab.swd.importOffline', async () => {
+      try { await importOfflineRuntime(context); }
+      catch (e) { void vscode.window.showErrorMessage(`Serial Lab 离线导入：${e instanceof Error ? e.message : String(e)}`); }
+    }),
     vscode.commands.registerCommand('serialLab.swd.installRuntime', async () => {
       try { await resolvePython(context, true); void vscode.window.showInformationMessage('SWD 环境已就绪'); }
       catch (e) { void vscode.window.showErrorMessage(`Serial Lab SWD: ${(e as Error).message}`); }
@@ -74,6 +98,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('serialLab.runtime.watch', async () => {
       try {
         const path = await controller!.watchRuntimeAtCursor();
+        if (!path) return;
         void vscode.window.showInformationMessage(`Serial Lab: watching ${path}`);
       } catch (e) {
         void vscode.window.showErrorMessage(`Serial Lab: ${(e as Error).message}`);
@@ -82,6 +107,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('serialLab.runtime.plot', async () => {
       try {
         const path = await controller!.plotRuntimeAtCursor();
+        if (!path) return;
         void vscode.window.showInformationMessage(`Serial Lab: plotting ${path}`);
       } catch (e) {
         void vscode.window.showErrorMessage(`Serial Lab: ${(e as Error).message}`);
@@ -90,6 +116,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('serialLab.runtime.reveal', async () => {
       try {
         const path = await controller!.watchRuntimeAtCursor();
+        if (!path) return;
         revealPanel(context, (m) => controller!.handleWebviewMessage(m as WebviewToHost));
         void vscode.window.showInformationMessage(`Serial Lab: revealed ${path}`);
       } catch (e) {
@@ -98,15 +125,10 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('serialLab.runtime.edit', async () => {
       const c = controller!;
-      const resolved = c.resolveAtEditor();
-      if (!resolved.ok) {
-        void vscode.window.showErrorMessage(
-          resolved.reason === 'no-editor'
-            ? '请在 C/C++ 源码编辑器中使用'
-            : '光标下没有受支持的运行时变量'
-        );
-        return;
-      }
+      let resolved;
+      try { resolved = await c.resolveRuntimeAction(); }
+      catch (e) { void vscode.window.showErrorMessage(`Serial Lab: ${(e as Error).message}`); return; }
+      if (!resolved) return;
       const symbol = resolved.symbol;
       const editor = c.getRuntimeEditor();
       let prepared;
@@ -144,8 +166,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       // Re-resolve at commit time (TOCTOU: firmware may change while dialog is open).
       const result = await editor.commit(prepared, parsed.value, () => {
-        const again = c.resolveAtEditor();
-        return again.ok ? again.symbol : undefined;
+        const again = c.getRuntimeSymbolService()?.resolveExpression(symbol.expression, symbol.sourceFile);
+        return again?.ok ? again.symbol : undefined;
       });
       if (result.success) {
         const rb = result.event.readbackValue;

@@ -29,6 +29,11 @@ function svc(sha = fwA.sha256, list = symbols) {
 }
 
 describe('RuntimeSymbolService', () => {
+  it('offers full paths for a struct root or member declaration without guessing an instance', () => {
+    expect(svc().candidateExpressions('kp')).toContain('controller.yaw.kp');
+    expect(svc().candidateExpressions('controller')).toContain('controller.yaw.ki');
+    expect(svc().candidateExpressions('ptr->kp')).toEqual([]);
+  });
   it('resolves global float with firmware content identity', () => {
     const r = svc().resolveExpression('global_gain');
     expect(r.ok).toBe(true);
